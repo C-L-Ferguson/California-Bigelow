@@ -226,3 +226,145 @@ fig2b <- ggplot(county_data_smooth, aes(x = date)) +
 ggsave("figure2b_county_trends_smooth.pdf", fig2b, width = 8, height = 9)
 ggsave("figure2b_county_trends_smooth.png", fig2b, width = 8, height = 9, dpi = 300)
 cat("Figure 2b (county trends, smoothed) saved.\n")
+
+# =============================================================================
+# FIGURE 3a: Event Study — Probation
+# =============================================================================
+
+es_avg_prob <- event_study |>
+  filter(!is.na(Percentage_Probation)) |>
+  mutate(DA_type = ifelse(Decarceratory == 1, "Decarceratory DA", "Non-Decarceratory DA")) |>
+  group_by(rel_q, DA_type) |>
+  summarise(
+    mean_prob = mean(Percentage_Probation, na.rm = TRUE),
+    se_prob   = sd(Percentage_Probation, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+fig3a <- ggplot(es_avg_prob, aes(x = rel_q, y = mean_prob,
+                                  color = DA_type, shape = DA_type, group = DA_type)) +
+  annotate("rect", xmin = -0.5, xmax = 1.5, ymin = -Inf, ymax = Inf,
+           fill = "grey90", alpha = 0.6) +
+  annotate("text", x = 0.5, y = Inf, label = "Election\nQuarters",
+           vjust = 1.5, size = 3, color = "grey40") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "grey60", linewidth = 0.4) +
+  geom_vline(xintercept =  1.5, linetype = "dashed", color = "grey60", linewidth = 0.4) +
+  geom_ribbon(aes(ymin = mean_prob - 1.96 * se_prob,
+                  ymax = mean_prob + 1.96 * se_prob,
+                  fill = DA_type), alpha = 0.15, color = NA) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 3) +
+  scale_color_manual(values = pal) +
+  scale_fill_manual(values  = pal) +
+  scale_shape_manual(values = c("Decarceratory DA" = 16, "Non-Decarceratory DA" = 17)) +
+  scale_x_continuous(breaks = -6:5, labels = quarter_labels) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Probation Sentence Rate Relative to Election Quarter",
+    subtitle = "Average % sentenced to probation by quarter relative to election year Q3 (t = 0)",
+    x        = "Quarter Relative to Election",
+    y        = "% Sentenced to Probation",
+    color    = NULL, fill = NULL, shape = NULL,
+    caption  = "Shaded region = election quarters (Q3–Q4). Bands = 95% CI. N = 8 decarceratory counties."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position    = "top",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold")
+  )
+
+ggsave("figure3a_probation_event_study.pdf", fig3a, width = 8, height = 5)
+ggsave("figure3a_probation_event_study.png", fig3a, width = 8, height = 5, dpi = 300)
+cat("Figure 3a (probation event study) saved.\n")
+
+# =============================================================================
+# FIGURE 3b: Bar Chart — Probation
+# =============================================================================
+
+bar_data_prob <- df |>
+  filter(!is.na(Percentage_Probation)) |>
+  mutate(
+    DA_type = ifelse(Decarceratory == 1, "Decarceratory DA", "Non-Decarceratory DA"),
+    Period  = ifelse(Election_Year == 1, "Election Quarters\n(Q3–Q4)", "Non-Election\nQuarters")
+  ) |>
+  group_by(DA_type, Period) |>
+  summarise(
+    mean_prob = mean(Percentage_Probation, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(Period = factor(Period, levels = c("Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)")))
+
+fig3b <- ggplot(bar_data_prob, aes(x = Period, y = mean_prob, fill = DA_type)) +
+  geom_col(position = position_dodge(width = 0.6), width = 0.5) +
+  geom_text(aes(label = paste0(round(mean_prob, 1), "%"),
+                y = mean_prob + 0.5),
+            position = position_dodge(width = 0.6), size = 3.5, color = "grey30") +
+  scale_fill_manual(values = pal) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.08))) +
+  labs(
+    title    = "Probation Sentence Rate: Election vs. Non-Election Quarters",
+    subtitle = "Average % sentenced to probation by DA type and electoral period",
+    x        = NULL,
+    y        = "% Sentenced to Probation",
+    fill     = NULL,
+    caption  = ""
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position    = "top",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold")
+  )
+
+ggsave("figure3b_probation_bar_chart.pdf", fig3b, width = 7, height = 5)
+ggsave("figure3b_probation_bar_chart.png", fig3b, width = 7, height = 5, dpi = 300)
+cat("Figure 3b (probation bar chart) saved.\n")
+
+# =============================================================================
+# FIGURE 3c: County Trends — Probation (Smoothed)
+# =============================================================================
+
+county_data_prob <- df |>
+  filter(County.x %in% focus_counties, !is.na(Percentage_Probation)) |>
+  mutate(
+    date     = year + (qnum - 1) / 4,
+    County.x = factor(County.x, levels = focus_counties)
+  ) |>
+  arrange(County.x, date) |>
+  group_by(County.x) |>
+  mutate(prob_smooth = zoo::rollmean(Percentage_Probation, k = 4, fill = NA, align = "center")) |>
+  ungroup()
+
+fig3c <- ggplot(county_data_prob, aes(x = date)) +
+  geom_rect(data = election_rects,
+            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+            inherit.aes = FALSE, fill = "#0072B2", alpha = 0.12) +
+  geom_line(aes(y = Percentage_Probation), color = "#E69F00", linewidth = 0.4, alpha = 0.3) +
+  geom_line(aes(y = prob_smooth), color = "#E69F00", linewidth = 1.2) +
+  facet_wrap(~County.x, ncol = 1, scales = "free_y") +
+  scale_x_continuous(breaks = 2013:2023) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  labs(
+    title    = "Probation Sentence Rate Over Time: Selected Decarceratory Counties",
+    subtitle = "Bold line = 4-quarter rolling average. Faint line = raw quarterly data. Shaded = election quarters.",
+    x        = NULL, y = "% Sentenced to Probation",
+    caption  = "Alameda, San Francisco, and Santa Clara all had decarceratory DAs throughout most of this period."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    strip.text         = element_text(face = "bold", size = 11),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold"),
+    axis.text.x        = element_text(angle = 45, hjust = 1)
+  )
+
+ggsave("figure3c_probation_county_trends.pdf", fig3c, width = 8, height = 9)
+ggsave("figure3c_probation_county_trends.png", fig3c, width = 8, height = 9, dpi = 300)
+cat("Figure 3c (probation county trends) saved.\n")

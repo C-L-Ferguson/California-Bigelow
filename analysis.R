@@ -98,6 +98,19 @@ for (outcome in outcomes) {
   etable(ma_t, mb_t, mc_t,
          headers = c("All Elections", "Contested", "Incumbent Sought"),
          keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+
+  slug <- tolower(sub("Percentage_", "", outcome))
+  etable(ma, mb, mc,
+         headers = c("All Elections", "Contested", "Incumbent Sought"),
+         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+         depvar  = TRUE,
+         file    = paste0("table2_", slug, "_baseline.tex"))
+  etable(ma_t, mb_t, mc_t,
+         headers = c("All Elections", "Contested", "Incumbent Sought"),
+         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+         depvar  = TRUE,
+         file    = paste0("table2_", slug, "_trends.tex"))
+  cat("Tables exported for", outcome, "\n")
 }
 
 # =============================================================================
