@@ -129,3 +129,10 @@ m1_nola <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Qu
 etable(m1, m1_nola,
        headers = c("Full Sample", "Excl. LA 2020"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+
+etable(m1, m1_nola,
+       headers = c("Full Sample", "Excl. LA 2020"),
+       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+       depvar  = TRUE,
+       file    = "table3_covid_sensitivity.tex")
+cat("Table exported: table3_covid_sensitivity.tex\n")
