@@ -24,36 +24,80 @@ contested        <- df |> filter(Contested == 1)
 # Incumbent sought: only elections where incumbent ran for reelection (cleanest test of personal electoral incentive)
 incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
 
-# --- Baseline models: County + Quarter fixed effects ---
-spec <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
+# =============================================================================
+# PRIMARY OUTCOME: Percentage_Prison
+# Key finding: negative interaction = decarceratory DAs become LESS punitive
+# near elections, contrary to the convergence hypothesis
+# =============================================================================
+
+spec       <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
+spec_trend <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter + County[time]
 
 m1 <- feols(spec, data = all_elections,    cluster = ~County.x)
 m2 <- feols(spec, data = contested,        cluster = ~County.x)
 m3 <- feols(spec, data = incumbent_sought, cluster = ~County.x)
 
-# --- Robustness: add county-specific linear time trends ---
-# Addresses concern that decarceratory counties were on different pre-existing trajectories
-spec_trend <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter + County[time]
-
 m1_trend <- feols(spec_trend, data = all_elections,    cluster = ~County.x)
 m2_trend <- feols(spec_trend, data = contested,        cluster = ~County.x)
 m3_trend <- feols(spec_trend, data = incumbent_sought, cluster = ~County.x)
 
-# --- Output ---
-cat("\n=== BASELINE MODELS ===\n")
-cat("Key coefficient: Election_Year x Decarceratory\n")
-cat("Negative = decarceratory DAs become LESS punitive near elections (against convergence hypothesis)\n\n")
-
+cat("\n=== PRIMARY OUTCOME: Percentage_Prison ===\n")
+cat("Baseline:\n")
 etable(m1, m2, m3,
-       headers  = c("All Elections", "Contested", "Incumbent Sought"),
-       keep     = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
-       title    = "Baseline: County + Quarter FEs")
+       headers = c("All Elections", "Contested", "Incumbent Sought"),
+       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
-cat("\n=== ROBUSTNESS: COUNTY-SPECIFIC TIME TRENDS ===\n")
-cat("Interaction attenuates, suggesting some baseline effect reflects differential county trajectories.\n")
-cat("Incumbent Sought subsample retains significance — strongest test of personal electoral incentive.\n\n")
-
+cat("\nWith County Time Trends:\n")
 etable(m1_trend, m2_trend, m3_trend,
-       headers  = c("All Elections", "Contested", "Incumbent Sought"),
-       keep     = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
-       title    = "Robustness: County + Quarter FEs + County Time Trends")
+       headers = c("All Elections", "Contested", "Incumbent Sought"),
+       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+
+# =============================================================================
+# ADDITIONAL OUTCOMES
+# Prison and probation results mirror each other: decarceratory DAs shift
+# sentences from prison toward probation near elections — leaning into their
+# platform rather than converging toward punitiveness.
+# Straight sentences show weak/inconsistent effects; split sentences show none.
+# =============================================================================
+
+outcomes <- c("Percentage_Probation", "Percentage_Straight", "Percentage_Split")
+
+for (outcome in outcomes) {
+  spec_o       <- as.formula(paste(outcome, "~ Election_Year * Decarceratory | County + Quarter"))
+  spec_o_trend <- as.formula(paste(outcome, "~ Election_Year * Decarceratory | County + Quarter + County[time]"))
+
+  ma   <- feols(spec_o,       data = all_elections,    cluster = ~County.x)
+  mb   <- feols(spec_o,       data = contested,        cluster = ~County.x)
+  mc   <- feols(spec_o,       data = incumbent_sought, cluster = ~County.x)
+  ma_t <- feols(spec_o_trend, data = all_elections,    cluster = ~County.x)
+  mb_t <- feols(spec_o_trend, data = contested,        cluster = ~County.x)
+  mc_t <- feols(spec_o_trend, data = incumbent_sought, cluster = ~County.x)
+
+  cat("\n=== OUTCOME:", outcome, "===\n")
+  cat("Baseline:\n")
+  etable(ma, mb, mc,
+         headers = c("All Elections", "Contested", "Incumbent Sought"),
+         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+
+  cat("\nWith County Time Trends:\n")
+  etable(ma_t, mb_t, mc_t,
+         headers = c("All Elections", "Contested", "Incumbent Sought"),
+         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+}
+
+# =============================================================================
+# SENSITIVITY CHECK: LA 2020 COVID overlap
+# LA had an election in 2020 Q3/Q4, coinciding with COVID court disruptions.
+# Excluding those two observations does not meaningfully change results.
+# =============================================================================
+
+cat("\n=== SENSITIVITY: Excluding LA 2020 Election Quarters (COVID check) ===\n")
+no_la_covid <- all_elections |>
+  filter(!(County.x == "Los Angeles" & Quarter %in% c(" 2020 Q3 Court", " 2020 Q4 Court")))
+
+m1_nola <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+                 data = no_la_covid, cluster = ~County.x)
+
+etable(m1, m1_nola,
+       headers = c("Full Sample", "Excl. LA 2020"),
+       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
