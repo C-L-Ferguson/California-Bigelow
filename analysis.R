@@ -52,6 +52,21 @@ etable(m1_trend, m2_trend, m3_trend,
        headers = c("All Elections", "Contested", "Incumbent Sought"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
+# --- Export regression tables ---
+etable(m1, m2, m3,
+       headers   = c("All Elections", "Contested", "Incumbent Sought"),
+       keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+       depvar    = TRUE,
+       file      = "table1_prison_baseline.tex")
+
+etable(m1_trend, m2_trend, m3_trend,
+       headers   = c("All Elections", "Contested", "Incumbent Sought"),
+       keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+       depvar    = TRUE,
+       file      = "table1_prison_trends.tex")
+
+cat("Tables exported: table1_prison_baseline.tex, table1_prison_trends.tex\n")
+
 # =============================================================================
 # ADDITIONAL OUTCOMES
 # Prison and probation results mirror each other: decarceratory DAs shift

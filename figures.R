@@ -109,14 +109,11 @@ bar_data <- df |>
 
 fig1b <- ggplot(bar_data, aes(x = Period, y = mean_prison, fill = DA_type)) +
   geom_col(position = position_dodge(width = 0.6), width = 0.5) +
-  geom_errorbar(aes(ymin = mean_prison - 1.96 * se_prison,
-                    ymax = mean_prison + 1.96 * se_prison),
-                position = position_dodge(width = 0.6), width = 0.2, linewidth = 0.6) +
   geom_text(aes(label = paste0(round(mean_prison, 1), "%"),
-                y = mean_prison + 1.96 * se_prison + 0.8),
+                y = mean_prison + 0.5),
             position = position_dodge(width = 0.6), size = 3.5, color = "grey30") +
   scale_fill_manual(values = pal) +
-  scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.1))) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.08))) +
   labs(
     title    = "Prison Sentence Rate: Election vs. Non-Election Quarters",
     subtitle = "Average % sentenced to prison by DA type and electoral period",
