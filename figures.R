@@ -9,8 +9,8 @@ df <- df |>
     Decarceratory = as.integer(Decarceratory),
     Election_Year = as.integer(Election_Year),
     # Parse year and quarter number from Quarter column (e.g. " 2014 Q3 Court")
-    year  = as.integer(regmatches(Quarter, regexpr("\\d{4}", Quarter))),
-    qnum  = as.integer(regmatches(Quarter, regexpr("(?<=Q)\\d", Quarter, perl = TRUE))),
+    year  = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter)),
+    qnum  = as.integer(sub(".*Q(\\d).*", "\\1", Quarter)),
     # Numeric time index: quarters since 2013 Q1
     t_abs = (year - 2013) * 4 + qnum
   )
