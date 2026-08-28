@@ -19,20 +19,42 @@ all_elections    <- df
 contested        <- df |> filter(Contested == 1)
 incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
 
-# Models: Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
+# Add numeric time trend variable (X is the row index / time counter)
+all_elections    <- all_elections    |> mutate(time = X)
+contested        <- contested        |> mutate(time = X)
+incumbent_sought <- incumbent_sought |> mutate(time = X)
+
+# Baseline models: County + Quarter FEs
 spec <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
 
 m1 <- feols(spec, data = all_elections,    cluster = ~County.x)
 m2 <- feols(spec, data = contested,        cluster = ~County.x)
 m3 <- feols(spec, data = incumbent_sought, cluster = ~County.x)
 
-# Results
-cat("\n=== All Elections ===\n");          print(summary(m1))
-cat("\n=== Contested Elections ===\n");    print(summary(m2))
-cat("\n=== Incumbent Sought Reelection ===\n"); print(summary(m3))
+# Robustness: add county-specific linear time trends
+spec_trend <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter + County[time]
 
-# Side-by-side
-cat("\n=== Combined Table ===\n")
+m1_trend <- feols(spec_trend, data = all_elections,    cluster = ~County.x)
+m2_trend <- feols(spec_trend, data = contested,        cluster = ~County.x)
+m3_trend <- feols(spec_trend, data = incumbent_sought, cluster = ~County.x)
+
+# Baseline results
+cat("\n=== Baseline: All Elections ===\n");          print(summary(m1))
+cat("\n=== Baseline: Contested Elections ===\n");    print(summary(m2))
+cat("\n=== Baseline: Incumbent Sought Reelection ===\n"); print(summary(m3))
+
+# Robustness results
+cat("\n=== With County Trends: All Elections ===\n");          print(summary(m1_trend))
+cat("\n=== With County Trends: Contested Elections ===\n");    print(summary(m2_trend))
+cat("\n=== With County Trends: Incumbent Sought Reelection ===\n"); print(summary(m3_trend))
+
+# Side-by-side: baseline vs. with trends
+cat("\n=== Baseline Table ===\n")
 etable(m1, m2, m3,
+       headers = c("All", "Contested", "Incumbent Sought"),
+       keep = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+
+cat("\n=== Robustness Table (County Time Trends) ===\n")
+etable(m1_trend, m2_trend, m3_trend,
        headers = c("All", "Contested", "Incumbent Sought"),
        keep = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
