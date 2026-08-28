@@ -19,10 +19,10 @@ all_elections    <- df
 contested        <- df |> filter(Contested == 1)
 incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
 
-# Add numeric time trend variable (X is the row index / time counter)
-all_elections    <- all_elections    |> mutate(time = X)
-contested        <- contested        |> mutate(time = X)
-incumbent_sought <- incumbent_sought |> mutate(time = X)
+# Add numeric time trend variable
+all_elections    <- all_elections    |> mutate(time = as.integer(factor(Quarter)))
+contested        <- contested        |> mutate(time = as.integer(factor(Quarter)))
+incumbent_sought <- incumbent_sought |> mutate(time = as.integer(factor(Quarter)))
 
 # Baseline models: County + Quarter FEs
 spec <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
