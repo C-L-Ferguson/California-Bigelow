@@ -10,7 +10,7 @@ df <- df |>
     Decarceratory       = as.integer(Decarceratory),
     Contested           = as.integer(Contested),
     Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
-    County              = as.factor(County),
+    County              = as.factor(County.x),
     Quarter             = as.factor(Quarter)
   )
 
@@ -22,9 +22,9 @@ incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
 # Models: Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
 spec <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
 
-m1 <- feols(spec, data = all_elections,    cluster = ~County)
-m2 <- feols(spec, data = contested,        cluster = ~County)
-m3 <- feols(spec, data = incumbent_sought, cluster = ~County)
+m1 <- feols(spec, data = all_elections,    cluster = ~County.x)
+m2 <- feols(spec, data = contested,        cluster = ~County.x)
+m3 <- feols(spec, data = incumbent_sought, cluster = ~County.x)
 
 # Results
 cat("\n=== All Elections ===\n");          print(summary(m1))
