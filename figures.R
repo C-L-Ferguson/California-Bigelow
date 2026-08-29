@@ -178,6 +178,48 @@ ggsave("figure1c_difference_chart.png", fig1c, width = 6, height = 5, dpi = 300)
 cat("Figure 1c (difference chart) saved.\n")
 
 # =============================================================================
+# FIGURE 1d: Relative Change Chart
+# Shows % change in prison rate relative to each group's own non-election baseline.
+# Normalizes for different baseline rates between DA types.
+# =============================================================================
+
+rel_data <- diff_data |>
+  mutate(
+    baseline     = NonElection,
+    rel_change   = (change / baseline) * 100
+  )
+
+fig1d <- ggplot(rel_data, aes(x = DA_type, y = rel_change, fill = DA_type)) +
+  geom_col(width = 0.5) +
+  geom_hline(yintercept = 0, linewidth = 0.6, color = "grey40") +
+  geom_text(aes(label = paste0(ifelse(rel_change > 0, "+", ""), round(rel_change, 1), "%"),
+                vjust = ifelse(rel_change < 0, 1.5, -0.5)),
+            size = 4, color = "grey20") +
+  scale_fill_manual(values = pal) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"),
+                     limits = c(-10, 6)) +
+  labs(
+    title    = "Relative Change in Prison Sentence Rate During Election Quarters",
+    subtitle = "% change from each group's own non-election baseline",
+    x        = NULL,
+    y        = "Relative Change in Prison Rate (%)",
+    fill     = NULL,
+    caption  = "Calculated from group means. Negative values indicate lower prison sentencing in election quarters.\nNot derived directly from regression coefficients."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position    = "none",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold")
+  )
+
+ggsave("figure1d_relative_change.pdf", fig1d, width = 6, height = 5)
+ggsave("figure1d_relative_change.png", fig1d, width = 6, height = 5, dpi = 300)
+cat("Figure 1d (relative change chart) saved.\n")
+
+# =============================================================================
 # FIGURE 2a: County Trends — Raw (original)
 # =============================================================================
 
