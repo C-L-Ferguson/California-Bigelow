@@ -502,8 +502,9 @@ fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
                  color = "#0072B2", linewidth = 0.8) +
   geom_point(size = 4, color = "#0072B2") +
   geom_text(aes(label = paste0(round(est, 2), "pp")),
-            nudge_y = 0.18, size = 3.5, color = "grey20") +
-  scale_x_continuous(labels = function(x) paste0(x, "pp")) +
+            nudge_y = 0.25, size = 3.5, color = "grey20") +
+  scale_x_continuous(labels = function(x) paste0(x, "pp"),
+                     limits = c(-18, 3)) +
   labs(
     title    = "Electoral Effect on Prison Sentencing: Decarceratory DAs",
     subtitle = "Coefficient on Election Year × Decarceratory interaction (baseline specification)",
@@ -519,6 +520,6 @@ fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
     plot.title         = element_text(face = "bold")
   )
 
-ggsave("figure4_coefficient_plot.pdf", fig4, width = 7, height = 4)
-ggsave("figure4_coefficient_plot.png", fig4, width = 7, height = 4, dpi = 300)
+ggsave("figure4_coefficient_plot.pdf", fig4, width = 8, height = 5)
+ggsave("figure4_coefficient_plot.png", fig4, width = 8, height = 5, dpi = 300)
 cat("Figure 4 (coefficient plot) saved.\n")
