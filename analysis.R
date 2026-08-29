@@ -136,3 +136,52 @@ etable(m1, m1_nola,
        depvar  = TRUE,
        file    = "table3_covid_sensitivity.tex")
 cat("Table exported: table3_covid_sensitivity.tex\n")
+
+# =============================================================================
+# PLACEBO TEST: Fake election years (t-2 shift)
+# Assigns "election year" status to quarters two years before the actual
+# election year. If the regression finds a similar interaction in fake election
+# years, the result may reflect pre-existing trends rather than electoral behavior.
+# A null placebo result strengthens the causal interpretation.
+# =============================================================================
+
+cat("\n=== PLACEBO TEST: Fake Election Years (shifted 2 years earlier) ===\n")
+
+# Get the real election years per county
+real_elections <- all_elections |>
+  filter(Election_Year == 1) |>
+  mutate(
+    year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter))
+  ) |>
+  select(County.x, year) |>
+  distinct() |>
+  mutate(placebo_year = year - 2)  # shift back 2 years
+
+# Build placebo Election_Year flag
+placebo_df <- all_elections |>
+  mutate(year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter)),
+         qnum = as.integer(sub(".*Q(\\d).*", "\\1", Quarter))) |>
+  left_join(real_elections |> select(County.x, placebo_year), by = "County.x") |>
+  mutate(
+    Placebo_Election = as.integer(!is.na(placebo_year) & year == placebo_year & qnum %in% c(3, 4))
+  ) |>
+  select(-year, -qnum, -placebo_year)
+
+m_placebo <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | County + Quarter,
+                   data = placebo_df, cluster = ~County.x)
+
+cat("Placebo (fake election years, t-2):\n")
+etable(m1, m_placebo,
+       headers = c("Real Election Years", "Placebo (t-2)"),
+       keep    = c("Election_Year", "Placebo_Election", "Decarceratory",
+                   "Election_Year:Decarceratory", "Placebo_Election:Decarceratory"))
+
+etable(m1, m_placebo,
+       headers = c("Real Election Years", "Placebo (t-2)"),
+       keep    = c("Election_Year", "Placebo_Election", "Decarceratory",
+                   "Election_Year:Decarceratory", "Placebo_Election:Decarceratory"),
+       depvar  = TRUE,
+       file    = "table4_placebo.tex")
+cat("Table exported: table4_placebo.tex\n")
+cat("Interpretation: If placebo interaction is near zero and insignificant,\n")
+cat("the real election effect is not driven by pre-existing trends.\n")
