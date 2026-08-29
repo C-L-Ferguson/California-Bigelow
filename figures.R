@@ -452,3 +452,73 @@ fig3c <- ggplot(county_data_prob, aes(x = date)) +
 ggsave("figure3c_probation_county_trends.pdf", fig3c, width = 8, height = 9)
 ggsave("figure3c_probation_county_trends.png", fig3c, width = 8, height = 9, dpi = 300)
 cat("Figure 3c (probation county trends) saved.\n")
+
+# =============================================================================
+# FIGURE 4: Coefficient Plot
+# Shows the Election_Year x Decarceratory interaction from the two primary
+# specifications side by side with 95% CI. Both below zero = platform
+# reinforcement, not convergence.
+# =============================================================================
+
+library(fixest)
+
+# Rebuild subsamples needed for coefficient plot
+df_reg <- df |>
+  mutate(
+    Election_Year = as.integer(Election_Year),
+    Decarceratory = as.integer(Decarceratory),
+    Contested     = as.integer(Contested),
+    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+    County        = as.factor(County.x),
+    Quarter       = as.factor(Quarter),
+    time          = as.numeric(X)
+  )
+
+incumbent_sought    <- df_reg |> filter(Did_Incumbent_Seek_Reelection == 1)
+incumbent_contested <- df_reg |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+
+m3 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+            data = incumbent_sought,    cluster = ~County.x)
+m4 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+            data = incumbent_contested, cluster = ~County.x)
+
+# Extract interaction coefficients and 95% CIs
+coef_data <- data.frame(
+  Model  = c("Incumbent Sought\n(N = 1,438)", "Incumbent +\nContested\n(N = 476)"),
+  est    = c(coef(m3)["Election_Year:Decarceratory"],
+             coef(m4)["Election_Year:Decarceratory"]),
+  se     = c(se(m3)["Election_Year:Decarceratory"],
+             se(m4)["Election_Year:Decarceratory"])
+) |>
+  mutate(
+    lo95 = est - 1.96 * se,
+    hi95 = est + 1.96 * se,
+    Model = factor(Model, levels = rev(unique(Model)))
+  )
+
+fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.6) +
+  geom_errorbarh(aes(xmin = lo95, xmax = hi95), height = 0.15,
+                 color = "#0072B2", linewidth = 0.8) +
+  geom_point(size = 4, color = "#0072B2") +
+  geom_text(aes(label = paste0(round(est, 2), "pp")),
+            nudge_y = 0.18, size = 3.5, color = "grey20") +
+  scale_x_continuous(labels = function(x) paste0(x, "pp")) +
+  labs(
+    title    = "Electoral Effect on Prison Sentencing: Decarceratory DAs",
+    subtitle = "Coefficient on Election Year × Decarceratory interaction (baseline specification)",
+    x        = "Change in Prison Sentence Rate (percentage points)",
+    y        = NULL,
+    caption  = "Points = OLS estimates. Bars = 95% CI. County and quarter fixed effects. Clustered SEs by county.\nNegative values indicate lower prison sentencing in election quarters relative to non-election baseline."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold")
+  )
+
+ggsave("figure4_coefficient_plot.pdf", fig4, width = 7, height = 4)
+ggsave("figure4_coefficient_plot.png", fig4, width = 7, height = 4, dpi = 300)
+cat("Figure 4 (coefficient plot) saved.\n")
