@@ -23,6 +23,8 @@ all_elections    <- df
 contested        <- df |> filter(Contested == 1)
 # Incumbent sought: only elections where incumbent ran for reelection (cleanest test of personal electoral incentive)
 incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
+# Incumbent sought + contested: sharpest test — incumbent personally on ballot AND facing a challenger
+incumbent_contested <- df |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
 
 # =============================================================================
 # PRIMARY OUTCOME: Percentage_Prison
@@ -33,34 +35,36 @@ incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
 spec       <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
 spec_trend <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter + County[time]
 
-m1 <- feols(spec, data = all_elections,    cluster = ~County.x)
-m2 <- feols(spec, data = contested,        cluster = ~County.x)
-m3 <- feols(spec, data = incumbent_sought, cluster = ~County.x)
+m1 <- feols(spec, data = all_elections,      cluster = ~County.x)
+m2 <- feols(spec, data = contested,          cluster = ~County.x)
+m3 <- feols(spec, data = incumbent_sought,   cluster = ~County.x)
+m4 <- feols(spec, data = incumbent_contested, cluster = ~County.x)
 
-m1_trend <- feols(spec_trend, data = all_elections,    cluster = ~County.x)
-m2_trend <- feols(spec_trend, data = contested,        cluster = ~County.x)
-m3_trend <- feols(spec_trend, data = incumbent_sought, cluster = ~County.x)
+m1_trend <- feols(spec_trend, data = all_elections,      cluster = ~County.x)
+m2_trend <- feols(spec_trend, data = contested,          cluster = ~County.x)
+m3_trend <- feols(spec_trend, data = incumbent_sought,   cluster = ~County.x)
+m4_trend <- feols(spec_trend, data = incumbent_contested, cluster = ~County.x)
 
 cat("\n=== PRIMARY OUTCOME: Percentage_Prison ===\n")
 cat("Baseline:\n")
-etable(m1, m2, m3,
-       headers = c("All Elections", "Contested", "Incumbent Sought"),
+etable(m1, m2, m3, m4,
+       headers = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
 cat("\nWith County Time Trends:\n")
-etable(m1_trend, m2_trend, m3_trend,
-       headers = c("All Elections", "Contested", "Incumbent Sought"),
+etable(m1_trend, m2_trend, m3_trend, m4_trend,
+       headers = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
 # --- Export regression tables ---
-etable(m1, m2, m3,
-       headers   = c("All Elections", "Contested", "Incumbent Sought"),
+etable(m1, m2, m3, m4,
+       headers   = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
        keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
        depvar    = TRUE,
        file      = "table1_prison_baseline.tex")
 
-etable(m1_trend, m2_trend, m3_trend,
-       headers   = c("All Elections", "Contested", "Incumbent Sought"),
+etable(m1_trend, m2_trend, m3_trend, m4_trend,
+       headers   = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
        keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
        depvar    = TRUE,
        file      = "table1_prison_trends.tex")
