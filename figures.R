@@ -136,6 +136,48 @@ ggsave("figure1b_bar_chart.png", fig1b, width = 7, height = 5, dpi = 300)
 cat("Figure 1b (bar chart) saved.\n")
 
 # =============================================================================
+# FIGURE 1c: Difference Chart
+# Shows change in prison rate from non-election to election quarters by DA type.
+# Makes the divergence in direction immediately legible.
+# =============================================================================
+
+diff_data <- bar_data |>
+  select(DA_type, Period, mean_prison) |>
+  mutate(Period = ifelse(grepl("Election", Period), "Election", "NonElection")) |>
+  tidyr::pivot_wider(names_from = Period, values_from = mean_prison) |>
+  mutate(change = Election - NonElection)
+
+fig1c <- ggplot(diff_data, aes(x = DA_type, y = change, fill = DA_type)) +
+  geom_col(width = 0.5) +
+  geom_hline(yintercept = 0, linewidth = 0.6, color = "grey40") +
+  geom_text(aes(label = paste0(ifelse(change > 0, "+", ""), round(change, 1), "pp"),
+                vjust = ifelse(change < 0, 1.5, -0.5)),
+            size = 4, color = "grey20") +
+  scale_fill_manual(values = pal) +
+  scale_y_continuous(labels = function(x) paste0(x, "pp"),
+                     limits = c(-3.5, 2)) +
+  labs(
+    title    = "Change in Prison Sentence Rate During Election Quarters",
+    subtitle = "Percentage-point change from non-election to election quarters (Q3–Q4)",
+    x        = NULL,
+    y        = "Change in % Sentenced to Prison (pp)",
+    fill     = NULL,
+    caption  = "Negative values indicate lower prison sentencing in election quarters relative to non-election quarters."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position    = "none",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold")
+  )
+
+ggsave("figure1c_difference_chart.pdf", fig1c, width = 6, height = 5)
+ggsave("figure1c_difference_chart.png", fig1c, width = 6, height = 5, dpi = 300)
+cat("Figure 1c (difference chart) saved.\n")
+
+# =============================================================================
 # FIGURE 2a: County Trends — Raw (original)
 # =============================================================================
 
