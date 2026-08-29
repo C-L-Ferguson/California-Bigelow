@@ -143,7 +143,7 @@ cat("Figure 1b (bar chart) saved.\n")
 
 diff_data <- bar_data |>
   select(DA_type, Period, mean_prison) |>
-  mutate(Period = ifelse(grepl("Election", Period), "Election", "NonElection")) |>
+  mutate(Period = ifelse(grepl("Election Quarters", as.character(Period)), "Election", "NonElection")) |>
   tidyr::pivot_wider(names_from = Period, values_from = mean_prison) |>
   mutate(change = Election - NonElection)
 
