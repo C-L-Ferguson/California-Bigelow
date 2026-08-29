@@ -35,36 +35,32 @@ incumbent_contested <- df |> filter(Did_Incumbent_Seek_Reelection == 1, Conteste
 spec       <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
 spec_trend <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter + County[time]
 
-m1 <- feols(spec, data = all_elections,      cluster = ~County.x)
-m2 <- feols(spec, data = contested,          cluster = ~County.x)
-m3 <- feols(spec, data = incumbent_sought,   cluster = ~County.x)
+m3 <- feols(spec, data = incumbent_sought,    cluster = ~County.x)
 m4 <- feols(spec, data = incumbent_contested, cluster = ~County.x)
 
-m1_trend <- feols(spec_trend, data = all_elections,      cluster = ~County.x)
-m2_trend <- feols(spec_trend, data = contested,          cluster = ~County.x)
-m3_trend <- feols(spec_trend, data = incumbent_sought,   cluster = ~County.x)
+m3_trend <- feols(spec_trend, data = incumbent_sought,    cluster = ~County.x)
 m4_trend <- feols(spec_trend, data = incumbent_contested, cluster = ~County.x)
 
 cat("\n=== PRIMARY OUTCOME: Percentage_Prison ===\n")
 cat("Baseline:\n")
-etable(m1, m2, m3, m4,
-       headers = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
+etable(m3, m4,
+       headers = c("Incumbent Sought", "Incumbent + Contested"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
 cat("\nWith County Time Trends:\n")
-etable(m1_trend, m2_trend, m3_trend, m4_trend,
-       headers = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
+etable(m3_trend, m4_trend,
+       headers = c("Incumbent Sought", "Incumbent + Contested"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
 # --- Export regression tables ---
-etable(m1, m2, m3, m4,
-       headers   = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
+etable(m3, m4,
+       headers   = c("Incumbent Sought", "Incumbent + Contested"),
        keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
        depvar    = TRUE,
        file      = "table1_prison_baseline.tex")
 
-etable(m1_trend, m2_trend, m3_trend, m4_trend,
-       headers   = c("All Elections", "Contested", "Incumbent Sought", "Incumbent + Contested"),
+etable(m3_trend, m4_trend,
+       headers   = c("Incumbent Sought", "Incumbent + Contested"),
        keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
        depvar    = TRUE,
        file      = "table1_prison_trends.tex")
@@ -85,32 +81,30 @@ for (outcome in outcomes) {
   spec_o       <- as.formula(paste(outcome, "~ Election_Year * Decarceratory | County + Quarter"))
   spec_o_trend <- as.formula(paste(outcome, "~ Election_Year * Decarceratory | County + Quarter + County[time]"))
 
-  ma   <- feols(spec_o,       data = all_elections,    cluster = ~County.x)
-  mb   <- feols(spec_o,       data = contested,        cluster = ~County.x)
-  mc   <- feols(spec_o,       data = incumbent_sought, cluster = ~County.x)
-  ma_t <- feols(spec_o_trend, data = all_elections,    cluster = ~County.x)
-  mb_t <- feols(spec_o_trend, data = contested,        cluster = ~County.x)
-  mc_t <- feols(spec_o_trend, data = incumbent_sought, cluster = ~County.x)
+  mc   <- feols(spec_o,       data = incumbent_sought,    cluster = ~County.x)
+  md   <- feols(spec_o,       data = incumbent_contested, cluster = ~County.x)
+  mc_t <- feols(spec_o_trend, data = incumbent_sought,    cluster = ~County.x)
+  md_t <- feols(spec_o_trend, data = incumbent_contested, cluster = ~County.x)
 
   cat("\n=== OUTCOME:", outcome, "===\n")
   cat("Baseline:\n")
-  etable(ma, mb, mc,
-         headers = c("All Elections", "Contested", "Incumbent Sought"),
+  etable(mc, md,
+         headers = c("Incumbent Sought", "Incumbent + Contested"),
          keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
   cat("\nWith County Time Trends:\n")
-  etable(ma_t, mb_t, mc_t,
-         headers = c("All Elections", "Contested", "Incumbent Sought"),
+  etable(mc_t, md_t,
+         headers = c("Incumbent Sought", "Incumbent + Contested"),
          keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
   slug <- tolower(sub("Percentage_", "", outcome))
-  etable(ma, mb, mc,
-         headers = c("All Elections", "Contested", "Incumbent Sought"),
+  etable(mc, md,
+         headers = c("Incumbent Sought", "Incumbent + Contested"),
          keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
          depvar  = TRUE,
          file    = paste0("table2_", slug, "_baseline.tex"))
-  etable(ma_t, mb_t, mc_t,
-         headers = c("All Elections", "Contested", "Incumbent Sought"),
+  etable(mc_t, md_t,
+         headers = c("Incumbent Sought", "Incumbent + Contested"),
          keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
          depvar  = TRUE,
          file    = paste0("table2_", slug, "_trends.tex"))
@@ -124,18 +118,18 @@ for (outcome in outcomes) {
 # =============================================================================
 
 cat("\n=== SENSITIVITY: Excluding LA 2020 Election Quarters (COVID check) ===\n")
-no_la_covid <- all_elections |>
+no_la_covid <- incumbent_sought |>
   filter(!(County.x == "Los Angeles" & Quarter %in% c(" 2020 Q3 Court", " 2020 Q4 Court")))
 
-m1_nola <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+m3_nola <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
                  data = no_la_covid, cluster = ~County.x)
 
-etable(m1, m1_nola,
-       headers = c("Full Sample", "Excl. LA 2020"),
+etable(m3, m3_nola,
+       headers = c("Incumbent Sought", "Excl. LA 2020"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
 
-etable(m1, m1_nola,
-       headers = c("Full Sample", "Excl. LA 2020"),
+etable(m3, m3_nola,
+       headers = c("Incumbent Sought", "Excl. LA 2020"),
        keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
        depvar  = TRUE,
        file    = "table3_covid_sensitivity.tex")
