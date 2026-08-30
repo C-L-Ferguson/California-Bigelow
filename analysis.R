@@ -14,7 +14,7 @@ df <- df |>
     County                        = as.factor(County.x),
     Quarter                       = as.factor(Quarter),
     time                          = as.numeric(X),
-    Recall                        = as.integer(ifelse(is.na(Recall) | Recall == "", 0, as.integer(Recall)))
+    Recall                        = as.integer(ifelse(is.na(Recall.) | Recall. == "", 0, as.integer(Recall.)))
   )
 
 # --- Subsamples ---
