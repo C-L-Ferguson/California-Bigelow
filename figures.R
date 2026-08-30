@@ -523,3 +523,91 @@ fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
 ggsave("figure4_coefficient_plot.pdf", fig4, width = 8, height = 5)
 ggsave("figure4_coefficient_plot.png", fig4, width = 8, height = 5, dpi = 300)
 cat("Figure 4 (coefficient plot) saved.\n")
+
+# =============================================================================
+# FIGURE 5: Baseline Comparison — Decarceratory vs. Non-Decarceratory DAs
+# in Non-Election Years (raw means with 95% CI error bars)
+# Shows that the two groups differ at baseline before any electoral pressure.
+# =============================================================================
+
+baseline_df <- df |>
+  filter(Election_Year == 0, !is.na(Percentage_Prison)) |>
+  mutate(DA_type = ifelse(Decarceratory == 1, "Decarceratory DA", "Non-Decarceratory DA"))
+
+baseline_summary <- baseline_df |>
+  group_by(DA_type) |>
+  summarise(
+    mean_prison    = mean(Percentage_Prison, na.rm = TRUE),
+    se_prison      = sd(Percentage_Prison, na.rm = TRUE) / sqrt(n()),
+    mean_probation = mean(Percentage_Probation, na.rm = TRUE),
+    se_probation   = sd(Percentage_Probation, na.rm = TRUE) / sqrt(n()),
+    n              = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    lo95_prison    = mean_prison    - 1.96 * se_prison,
+    hi95_prison    = mean_prison    + 1.96 * se_prison,
+    lo95_probation = mean_probation - 1.96 * se_probation,
+    hi95_probation = mean_probation + 1.96 * se_probation
+  )
+
+fig5 <- ggplot(baseline_summary,
+               aes(x = DA_type, y = mean_prison, fill = DA_type, color = DA_type)) +
+  geom_col(width = 0.5, alpha = 0.85) +
+  geom_errorbar(aes(ymin = lo95_prison, ymax = hi95_prison),
+                width = 0.12, linewidth = 0.7, color = "grey30") +
+  geom_text(aes(label = paste0(round(mean_prison, 1), "%")),
+            vjust = -1.2, size = 4, color = "grey20", fontface = "bold") +
+  scale_fill_manual(values  = pal, guide = "none") +
+  scale_color_manual(values = pal, guide = "none") +
+  scale_y_continuous(labels = function(x) paste0(x, "%"),
+                     expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title    = "Prison Sentencing Rate: Decarceratory vs. Non-Decarceratory DAs",
+    subtitle = "Non-election quarters only (raw means ± 95% CI)",
+    x        = NULL,
+    y        = "% of Sentences Resulting in Prison",
+    caption  = "Unit of observation: county-quarter. Non-election quarters defined as quarters\nwhere Election_Year = 0. Error bars show 95% confidence intervals."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor   = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold")
+  )
+
+ggsave("figure5_baseline_comparison.pdf", fig5, width = 7, height = 5)
+ggsave("figure5_baseline_comparison.png", fig5, width = 7, height = 5, dpi = 300)
+cat("Figure 5 (baseline comparison) saved.\n")
+
+# --- Table: Baseline means by DA type (non-election quarters) ---
+baseline_table <- baseline_df |>
+  group_by(DA_type) |>
+  summarise(
+    N                  = n(),
+    Mean_Prison        = round(mean(Percentage_Prison,    na.rm = TRUE), 2),
+    SD_Prison          = round(sd(Percentage_Prison,      na.rm = TRUE), 2),
+    Mean_Probation     = round(mean(Percentage_Probation, na.rm = TRUE), 2),
+    SD_Probation       = round(sd(Percentage_Probation,   na.rm = TRUE), 2),
+    Mean_Straight      = round(mean(Percentage_Straight,  na.rm = TRUE), 2),
+    SD_Straight        = round(sd(Percentage_Straight,    na.rm = TRUE), 2),
+    Mean_Split         = round(mean(Percentage_Split,     na.rm = TRUE), 2),
+    SD_Split           = round(sd(Percentage_Split,       na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+print(baseline_table)
+
+# Export as LaTeX
+library(xtable)
+xt <- xtable(baseline_table,
+             caption = "Baseline Sentencing Outcomes by DA Type (Non-Election Quarters)",
+             label   = "tab:baseline",
+             digits  = 2)
+print(xt,
+      file             = "table0_baseline_comparison.tex",
+      include.rownames = FALSE,
+      booktabs         = TRUE,
+      caption.placement = "top")
+cat("Table exported: table0_baseline_comparison.tex\n")
