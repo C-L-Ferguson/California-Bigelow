@@ -120,7 +120,7 @@ for (outcome in outcomes) {
 
 cat("\n=== SENSITIVITY: Excluding LA 2020 Election Quarters (COVID check) ===\n")
 no_la_covid <- incumbent_sought |>
-  filter(!(County.x == "Los Angeles" & Quarter %in% c(" 2020 Q3 Court", " 2020 Q4 Court")))
+  filter(!(County.x == "Los Angeles" & Quarter %in% c("2020 Q3 Court", "2020 Q4 Court")))
 
 m3_nola <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
                  data = no_la_covid, cluster = ~County.x)
