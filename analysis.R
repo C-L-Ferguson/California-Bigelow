@@ -6,7 +6,6 @@ df <- read.csv("https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelo
 
 # Coerce variable types; County.x is the county identifier in this merged dataset
 df <- df |>
-  rename(Recall = `Recall?`) |>
   mutate(
     Election_Year                 = as.integer(Election_Year),
     Decarceratory                 = as.integer(Decarceratory),
