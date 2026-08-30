@@ -93,8 +93,12 @@ cat("Figure 1a (event study) saved.\n")
 # Average prison rate for each DA type in election vs. non-election quarters.
 # =============================================================================
 
-bar_data <- df |>
-  filter(!is.na(Percentage_Prison)) |>
+# Use incumbent_contested subsample — primary specification
+bar_df <- df |>
+  filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1,
+         !is.na(Percentage_Prison), !is.na(Decarceratory), Decarceratory %in% c(0,1))
+
+bar_data <- bar_df |>
   mutate(
     DA_type   = ifelse(Decarceratory == 1, "Decarceratory DA", "Non-Decarceratory DA"),
     Period    = ifelse(Election_Year == 1, "Election Quarters\n(Q3–Q4)", "Non-Election\nQuarters")
@@ -116,11 +120,11 @@ fig1b <- ggplot(bar_data, aes(x = Period, y = mean_prison, fill = DA_type)) +
   scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.08))) +
   labs(
     title    = "Prison Sentence Rate: Election vs. Non-Election Quarters",
-    subtitle = "Average % sentenced to prison by DA type and electoral period",
+    subtitle = "Incumbent-sought, contested races only (primary specification)",
     x        = NULL,
     y        = "% Sentenced to Prison",
     fill     = NULL,
-    caption  = "Error bars = 95% CI."
+    caption  = "Incumbent-sought, contested elections only. Error bars = 95% CI."
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -155,7 +159,7 @@ fig1c <- ggplot(diff_data, aes(x = DA_type, y = change, fill = DA_type)) +
             size = 4, color = "grey20") +
   scale_fill_manual(values = pal) +
   scale_y_continuous(labels = function(x) paste0(x, "pp"),
-                     limits = c(-3.5, 2)) +
+                     limits = c(-5, 3)) +
   labs(
     title    = "Change in Prison Sentence Rate During Election Quarters",
     subtitle = "Percentage-point change from non-election to election quarters (Q3–Q4)",
@@ -483,41 +487,56 @@ m4 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
             data = incumbent_contested, cluster = ~County.x)
 
 # Extract interaction coefficients and 95% CIs
+# N counts from new 2024 dataset
+n_sought    <- nrow(incumbent_sought    |> filter(!is.na(Percentage_Prison)))
+n_contested <- nrow(incumbent_contested |> filter(!is.na(Percentage_Prison)))
+
 coef_data <- data.frame(
-  Model  = c("Incumbent Sought\n(N = 1,438)", "Incumbent +\nContested\n(N = 476)"),
-  est    = c(coef(m3)["Election_Year:Decarceratory"],
-             coef(m4)["Election_Year:Decarceratory"]),
-  se     = c(se(m3)["Election_Year:Decarceratory"],
-             se(m4)["Election_Year:Decarceratory"])
+  Model     = c(paste0("Incumbent Sought\n(N = ", n_sought, ")"),
+                paste0("Incumbent +\nContested\n(N = ", n_contested, ")")),
+  est       = c(coef(m3)["Election_Year:Decarceratory"],
+                coef(m4)["Election_Year:Decarceratory"]),
+  se        = c(se(m3)["Election_Year:Decarceratory"],
+                se(m4)["Election_Year:Decarceratory"]),
+  headline  = c(FALSE, TRUE)   # Incumbent + Contested is the lead result
 ) |>
   mutate(
-    lo95 = est - 1.96 * se,
-    hi95 = est + 1.96 * se,
+    lo95  = est - 1.96 * se,
+    hi95  = est + 1.96 * se,
     Model = factor(Model, levels = rev(unique(Model)))
   )
 
+# Color: headline result in blue, secondary in grey
+point_colors <- ifelse(coef_data$headline[order(coef_data$Model)], "#0072B2", "grey60")
+
 fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.6) +
-  geom_errorbarh(aes(xmin = lo95, xmax = hi95), height = 0.15,
-                 color = "#0072B2", linewidth = 0.8) +
-  geom_point(size = 4, color = "#0072B2") +
+  geom_errorbarh(aes(xmin = lo95, xmax = hi95, color = headline),
+                 height = 0.15, linewidth = 0.8) +
+  geom_point(aes(color = headline, size = headline)) +
   geom_text(aes(label = paste0(round(est, 2), "pp")),
             nudge_y = 0.25, size = 3.5, color = "grey20") +
+  annotate("text", x = coef(m4)["Election_Year:Decarceratory"] - 0.3,
+           y = 2,   # top row (Incumbent + Contested plots at top after factor reversal)
+           label = "* p < 0.05", hjust = 1, size = 3, color = "#0072B2") +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "#0072B2"), guide = "none") +
+  scale_size_manual(values  = c("FALSE" = 3, "TRUE" = 5),                guide = "none") +
   scale_x_continuous(labels = function(x) paste0(x, "pp"),
-                     limits = c(-18, 3)) +
+                     limits = c(-14, 4)) +
   labs(
     title    = "Electoral Effect on Prison Sentencing: Decarceratory DAs",
-    subtitle = "Coefficient on Election Year × Decarceratory interaction (baseline specification)",
+    subtitle = "Coefficient on Election Year × Decarceratory interaction — contested races drive the effect",
     x        = "Change in Prison Sentence Rate (percentage points)",
     y        = NULL,
-    caption  = "Points = OLS estimates. Bars = 95% CI. County and quarter fixed effects. Clustered SEs by county.\nNegative values indicate lower prison sentencing in election quarters relative to non-election baseline."
+    caption  = "Points = OLS estimates. Bars = 95% CI. County and quarter fixed effects. Clustered SEs by county.\nNegative = lower prison sentencing in election quarters. Incumbent + Contested is primary specification."
   ) +
   theme_minimal(base_size = 12) +
   theme(
     panel.grid.minor   = element_blank(),
     panel.grid.major.y = element_blank(),
     plot.caption       = element_text(color = "grey50", size = 9),
-    plot.title         = element_text(face = "bold")
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(color = "#0072B2", size = 10)
   )
 
 ggsave("figure4_coefficient_plot.pdf", fig4, width = 8, height = 5)
