@@ -2,7 +2,7 @@ library(fixest)
 library(dplyr)
 
 # Load data
-df <- read.csv("https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelow/claude/dataset-review-l0rluy/CA_Merged_Data_FEB_3.csv")
+df <- read.csv("https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelow/claude/dataset-review-l0rluy/CA_Merged_Data_2024.csv")
 
 # Coerce variable types; County.x is the county identifier in this merged dataset
 df <- df |>
@@ -13,7 +13,8 @@ df <- df |>
     Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
     County                        = as.factor(County.x),
     Quarter                       = as.factor(Quarter),
-    time                          = as.numeric(X)  # numeric index for county time trends
+    time                          = as.numeric(X),  # numeric index for county time trends
+    Recall                        = as.integer(ifelse(is.na(`Recall?`) | `Recall?` == "", 0, as.integer(`Recall?`)))
   )
 
 # --- Subsamples ---
@@ -169,7 +170,7 @@ m_placebo <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | County
                    data = placebo_df, cluster = ~County.x)
 
 cat("Placebo (fake election years, t-2):\n")
-etable(m1, m_placebo,
+etable(m3, m_placebo,
        headers = c("Real Election Years", "Placebo (t-2)"),
        keep    = c("Election_Year", "Placebo_Election", "Decarceratory",
                    "Election_Year:Decarceratory", "Placebo_Election:Decarceratory"))
