@@ -6,6 +6,7 @@ df <- read.csv("https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelo
 
 # Coerce variable types; County.x is the county identifier in this merged dataset
 df <- df |>
+  rename(Recall = `Recall?`) |>
   mutate(
     Election_Year                 = as.integer(Election_Year),
     Decarceratory                 = as.integer(Decarceratory),
@@ -13,8 +14,8 @@ df <- df |>
     Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
     County                        = as.factor(County.x),
     Quarter                       = as.factor(Quarter),
-    time                          = as.numeric(X),  # numeric index for county time trends
-    Recall                        = as.integer(ifelse(is.na(.data[["Recall?"]]) | .data[["Recall?"]] == "", 0, as.integer(.data[["Recall?"]])))
+    time                          = as.numeric(X),
+    Recall                        = as.integer(ifelse(is.na(Recall) | Recall == "", 0, as.integer(Recall)))
   )
 
 # --- Subsamples ---
