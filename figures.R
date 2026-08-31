@@ -470,6 +470,75 @@ ggsave("figure3c_probation_county_trends.png", fig3c, width = 8, height = 9, dpi
 cat("Figure 3c (probation county trends) saved.\n")
 
 # =============================================================================
+# FIGURE 3d: Election-Year Change Bar Chart
+# Shows within-group change in prison sentencing during election years,
+# relative to each group's own non-election baseline (= 0).
+# Decarceratory DAs dip below zero; non-decarceratory DAs stay flat.
+# =============================================================================
+
+change_data <- data.frame(
+  DA_type   = rep(c("Decarceratory DA", "Non-Decarceratory DA"), 2),
+  Subsample = rep(c("Incumbent Sought", "Incumbent + Contested"), each = 2),
+  change    = c(
+    coef(m3)["Election_Year_Full"] + coef(m3)["Election_Year_Full:Decarceratory"],
+    coef(m3)["Election_Year_Full"],
+    coef(m4)["Election_Year_Full"] + coef(m4)["Election_Year_Full:Decarceratory"],
+    coef(m4)["Election_Year_Full"]
+  ),
+  se = c(
+    sqrt(vcov(m3)["Election_Year_Full","Election_Year_Full"] +
+         vcov(m3)["Election_Year_Full:Decarceratory","Election_Year_Full:Decarceratory"] +
+         2*vcov(m3)["Election_Year_Full","Election_Year_Full:Decarceratory"]),
+    sqrt(vcov(m3)["Election_Year_Full","Election_Year_Full"]),
+    sqrt(vcov(m4)["Election_Year_Full","Election_Year_Full"] +
+         vcov(m4)["Election_Year_Full:Decarceratory","Election_Year_Full:Decarceratory"] +
+         2*vcov(m4)["Election_Year_Full","Election_Year_Full:Decarceratory"]),
+    sqrt(vcov(m4)["Election_Year_Full","Election_Year_Full"])
+  )
+) |>
+  mutate(
+    lo95      = change - 1.96 * se,
+    hi95      = change + 1.96 * se,
+    Subsample = factor(Subsample, levels = c("Incumbent Sought", "Incumbent + Contested"))
+  )
+
+fig3d <- ggplot(change_data, aes(x = DA_type, y = change, fill = DA_type)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.6) +
+  geom_col(width = 0.5, alpha = 0.85) +
+  geom_errorbar(aes(ymin = lo95, ymax = hi95), width = 0.12, linewidth = 0.7, color = "grey30") +
+  geom_text(aes(label = paste0(round(change, 1), "pp"),
+                vjust = ifelse(change < 0, 1.5, -0.8)),
+            size = 4, color = "grey20", fontface = "bold") +
+  geom_text(
+    data = subset(change_data, DA_type == "Decarceratory DA" & Subsample == "Incumbent + Contested"),
+    aes(label = "~27% less likely\nto receive prison sentence"),
+    y = -11, vjust = 0, size = 3.2, color = "#0072B2", fontface = "italic"
+  ) +
+  facet_wrap(~Subsample) +
+  scale_fill_manual(values = pal, guide = "none") +
+  scale_y_continuous(labels = function(x) paste0(x, "pp"), limits = c(-16, 6)) +
+  labs(
+    title    = "Change in Prison Sentencing During Election Years",
+    subtitle = "Within-group change from each DA type's own non-election baseline (= 0)\nCounty and quarter fixed effects absorbed",
+    x        = NULL,
+    y        = "Change in prison rate (pp)",
+    caption  = "Bars = OLS estimates. Error bars = 95% CI. Clustered SEs by county.\nBaseline prison rate ~30%; -8pp ≈ 27% reduction."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor    = element_blank(),
+    strip.text          = element_text(face = "bold", size = 11),
+    plot.title          = element_text(face = "bold"),
+    plot.subtitle       = element_text(color = "grey40", size = 10),
+    plot.caption        = element_text(color = "grey50", size = 9)
+  )
+
+ggsave("figure3d_election_change_bars.pdf", fig3d, width = 8, height = 5)
+ggsave("figure3d_election_change_bars.png", fig3d, width = 8, height = 5, dpi = 300)
+cat("Figure 3d (election-year change bar chart) saved.\n")
+
+# =============================================================================
 # FIGURE 4: Coefficient Plot
 # Shows the Election_Year x Decarceratory interaction from the two primary
 # specifications side by side with 95% CI. Both below zero = platform
