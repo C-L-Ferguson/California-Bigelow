@@ -128,14 +128,14 @@ for (outcome in outcomes) {
 
   cat("\n=== OUTCOME:", outcome, "===\n")
   cat("Baseline:\n")
-  etable(mc, md,
+  print(etable(mc, md,
          headers = c("Incumbent Sought", "Incumbent + Contested"),
-         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"))
+         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
 
   cat("\nWith County Time Trends:\n")
-  etable(mc_t, md_t,
+  print(etable(mc_t, md_t,
          headers = c("Incumbent Sought", "Incumbent + Contested"),
-         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"))
+         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
 
   slug <- tolower(sub("Percentage_", "", outcome))
   etable(mc, md,
