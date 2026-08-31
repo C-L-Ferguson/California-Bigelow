@@ -184,3 +184,83 @@ etable(m1, m_placebo,
 cat("Table exported: table4_placebo.tex\n")
 cat("Interpretation: If placebo interaction is near zero and insignificant,\n")
 cat("the real election effect is not driven by pre-existing trends.\n")
+
+# =============================================================================
+# POST-ELECTION TEST: Do decarceratory DAs revert after the election?
+# Flags Q1/Q2 of the year immediately after each election as Post_Election.
+# If the interaction is positive (or null), prison rates bounce back —
+# consistent with electoral strategy rather than genuine commitment.
+# If negative, the effect persists — consistent with platform reinforcement.
+# =============================================================================
+
+cat("\n=== POST-ELECTION TEST: Reversion after election? ===\n")
+
+# Get election years per county (Q3 of election year = rel_q 0)
+election_years_by_county <- all_elections |>
+  filter(Election_Year == 1) |>
+  mutate(year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter))) |>
+  select(County.x, year) |>
+  distinct() |>
+  mutate(post_year = year + 1)
+
+# Flag Q1/Q2 of the year after each election as Post_Election
+post_df <- all_elections |>
+  mutate(
+    year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter)),
+    qnum = as.integer(sub(".*Q(\\d).*", "\\1", Quarter))
+  ) |>
+  left_join(election_years_by_county |> select(County.x, post_year),
+            by = "County.x") |>
+  mutate(
+    Post_Election = as.integer(!is.na(post_year) & year == post_year & qnum %in% c(1, 2))
+  ) |>
+  select(-year, -qnum, -post_year) |>
+  mutate(
+    Election_Year = as.integer(Election_Year),
+    Decarceratory = as.integer(Decarceratory),
+    Contested     = as.integer(Contested),
+    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+    County        = as.factor(County.x),
+    Quarter       = as.factor(Quarter)
+  )
+
+post_incumbent_sought    <- post_df |> filter(Did_Incumbent_Seek_Reelection == 1)
+post_incumbent_contested <- post_df |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+
+# Model A: Election_Year effect (replicates m3/m4 in this data frame)
+# Model B: Post_Election effect
+# Model C: Both simultaneously — compares in-election vs. post-election within same model
+
+m_post_sought    <- feols(Percentage_Prison ~ Post_Election * Decarceratory | County + Quarter,
+                          data = post_incumbent_sought,    cluster = ~County.x)
+m_post_contested <- feols(Percentage_Prison ~ Post_Election * Decarceratory | County + Quarter,
+                          data = post_incumbent_contested, cluster = ~County.x)
+
+# Combined model: election AND post-election in same regression
+m_combined_sought    <- feols(Percentage_Prison ~ Election_Year * Decarceratory +
+                                                  Post_Election * Decarceratory | County + Quarter,
+                              data = post_incumbent_sought,    cluster = ~County.x)
+m_combined_contested <- feols(Percentage_Prison ~ Election_Year * Decarceratory +
+                                                  Post_Election * Decarceratory | County + Quarter,
+                              data = post_incumbent_contested, cluster = ~County.x)
+
+cat("Post-election only (does the effect persist after the election?):\n")
+print(etable(m_post_sought, m_post_contested,
+       headers = c("Incumbent Sought", "Incumbent + Contested"),
+       keep    = c("Post_Election", "Decarceratory", "Post_Election:Decarceratory")))
+
+cat("\nCombined: Election + Post-Election in same model:\n")
+print(etable(m_combined_sought, m_combined_contested,
+       headers = c("Incumbent Sought", "Incumbent + Contested"),
+       keep    = c("Election_Year", "Post_Election", "Decarceratory",
+                   "Election_Year:Decarceratory", "Post_Election:Decarceratory")))
+
+etable(m_combined_sought, m_combined_contested,
+       headers = c("Incumbent Sought", "Incumbent + Contested"),
+       keep    = c("Election_Year", "Post_Election", "Decarceratory",
+                   "Election_Year:Decarceratory", "Post_Election:Decarceratory"),
+       depvar  = TRUE,
+       file    = "table5_post_election.tex")
+cat("Table exported: table5_post_election.tex\n")
+cat("Interpretation: Negative Election_Year interaction + null/positive Post_Election interaction\n")
+cat("= effect is temporary (electoral strategy). Persistent negative = genuine commitment.\n")
