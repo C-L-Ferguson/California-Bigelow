@@ -49,70 +49,63 @@ incumbent_contested_full <- df |> filter(Did_Incumbent_Seek_Reelection == 1, Con
 
 # =============================================================================
 # PRIMARY OUTCOME: Percentage_Prison
-# Key finding: negative interaction = decarceratory DAs become LESS punitive
-# near elections, contrary to the convergence hypothesis
+# Primary spec uses full-year coding (all 4 quarters of election year = 1).
+# Effect runs throughout the election year, not just Q3/Q4.
+# Key finding: -8.033** (Incumbent + Contested), -3.497* (Incumbent Sought)
 # =============================================================================
 
-spec       <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter
-spec_trend <- Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter + County[time]
+# Primary models: full-year coding
+m3 <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
+            data = incumbent_sought_full,    cluster = ~County.x)
+m4 <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
+            data = incumbent_contested_full, cluster = ~County.x)
 
-m3 <- feols(spec, data = incumbent_sought,    cluster = ~County.x)
-m4 <- feols(spec, data = incumbent_contested, cluster = ~County.x)
+m3_trend <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter + County[time],
+                  data = incumbent_sought_full,    cluster = ~County.x)
+m4_trend <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter + County[time],
+                  data = incumbent_contested_full, cluster = ~County.x)
 
-m3_trend <- feols(spec_trend, data = incumbent_sought,    cluster = ~County.x)
-m4_trend <- feols(spec_trend, data = incumbent_contested, cluster = ~County.x)
-
-cat("\n=== PRIMARY OUTCOME: Percentage_Prison ===\n")
+cat("\n=== PRIMARY OUTCOME: Percentage_Prison (full-year coding) ===\n")
 cat("Baseline:\n")
-etable(m3, m4,
+print(etable(m3, m4,
        headers = c("Incumbent Sought", "Incumbent + Contested"),
-       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+       keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
 
 cat("\nWith County Time Trends:\n")
-etable(m3_trend, m4_trend,
+print(etable(m3_trend, m4_trend,
        headers = c("Incumbent Sought", "Incumbent + Contested"),
-       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+       keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
 
-# --- Export regression tables ---
 etable(m3, m4,
        headers   = c("Incumbent Sought", "Incumbent + Contested"),
-       keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+       keep      = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"),
        depvar    = TRUE,
        file      = "table1_prison_baseline.tex")
 
 etable(m3_trend, m4_trend,
        headers   = c("Incumbent Sought", "Incumbent + Contested"),
-       keep      = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+       keep      = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"),
        depvar    = TRUE,
        file      = "table1_prison_trends.tex")
 
 cat("Tables exported: table1_prison_baseline.tex, table1_prison_trends.tex\n")
 
 # =============================================================================
-# FULL-YEAR CODING: Election_Year_Full = 1 for all four quarters of election year
-# Tests whether expanding the treatment window changes results.
-# If coefficient is similar or larger → effect extends throughout election year.
-# If it attenuates → effect is concentrated in Q3/Q4 only.
+# ROBUSTNESS: Q3/Q4-only coding (original specification)
+# Confirms effect is present even with narrower treatment window.
 # =============================================================================
 
-cat("\n=== FULL-YEAR CODING COMPARISON ===\n")
+cat("\n=== ROBUSTNESS: Q3/Q4-only coding vs. full-year primary spec ===\n")
 
-m3_full <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
-                 data = incumbent_sought_full,    cluster = ~County.x)
-m4_full <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
-                 data = incumbent_contested_full, cluster = ~County.x)
+m3_q34 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+                data = incumbent_sought,    cluster = ~County.x)
+m4_q34 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+                data = incumbent_contested, cluster = ~County.x)
 
-cat("Q3/Q4 only (original) vs. Full-year coding — Incumbent + Contested:\n")
-print(etable(m4, m4_full,
-       headers = c("Q3/Q4 Only", "Full Year"),
-       keep    = c("Election_Year", "Election_Year_Full", "Decarceratory",
-                   "Election_Year:Decarceratory", "Election_Year_Full:Decarceratory")))
-
-cat("\nIncumbent Sought:\n")
-print(etable(m3, m3_full,
-       headers = c("Q3/Q4 Only", "Full Year"),
-       keep    = c("Election_Year", "Election_Year_Full", "Decarceratory",
-                   "Election_Year:Decarceratory", "Election_Year_Full:Decarceratory")))
+print(etable(m4, m4_q34,
+       headers = c("Full Year (Primary)", "Q3/Q4 Only (Robustness)"),
+       keep    = c("Election_Year_Full", "Election_Year", "Decarceratory",
+                   "Election_Year_Full:Decarceratory", "Election_Year:Decarceratory")))
 
 # =============================================================================
 # ADDITIONAL OUTCOMES
@@ -125,34 +118,34 @@ print(etable(m3, m3_full,
 outcomes <- c("Percentage_Probation", "Percentage_Straight", "Percentage_Split")
 
 for (outcome in outcomes) {
-  spec_o       <- as.formula(paste(outcome, "~ Election_Year * Decarceratory | County + Quarter"))
-  spec_o_trend <- as.formula(paste(outcome, "~ Election_Year * Decarceratory | County + Quarter + County[time]"))
+  spec_o       <- as.formula(paste(outcome, "~ Election_Year_Full * Decarceratory | County + Quarter"))
+  spec_o_trend <- as.formula(paste(outcome, "~ Election_Year_Full * Decarceratory | County + Quarter + County[time]"))
 
-  mc   <- feols(spec_o,       data = incumbent_sought,    cluster = ~County.x)
-  md   <- feols(spec_o,       data = incumbent_contested, cluster = ~County.x)
-  mc_t <- feols(spec_o_trend, data = incumbent_sought,    cluster = ~County.x)
-  md_t <- feols(spec_o_trend, data = incumbent_contested, cluster = ~County.x)
+  mc   <- feols(spec_o,       data = incumbent_sought_full,    cluster = ~County.x)
+  md   <- feols(spec_o,       data = incumbent_contested_full, cluster = ~County.x)
+  mc_t <- feols(spec_o_trend, data = incumbent_sought_full,    cluster = ~County.x)
+  md_t <- feols(spec_o_trend, data = incumbent_contested_full, cluster = ~County.x)
 
   cat("\n=== OUTCOME:", outcome, "===\n")
   cat("Baseline:\n")
   etable(mc, md,
          headers = c("Incumbent Sought", "Incumbent + Contested"),
-         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"))
 
   cat("\nWith County Time Trends:\n")
   etable(mc_t, md_t,
          headers = c("Incumbent Sought", "Incumbent + Contested"),
-         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"))
 
   slug <- tolower(sub("Percentage_", "", outcome))
   etable(mc, md,
          headers = c("Incumbent Sought", "Incumbent + Contested"),
-         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"),
          depvar  = TRUE,
          file    = paste0("table2_", slug, "_baseline.tex"))
   etable(mc_t, md_t,
          headers = c("Incumbent Sought", "Incumbent + Contested"),
-         keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+         keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"),
          depvar  = TRUE,
          file    = paste0("table2_", slug, "_trends.tex"))
   cat("Tables exported for", outcome, "\n")
@@ -165,19 +158,19 @@ for (outcome in outcomes) {
 # =============================================================================
 
 cat("\n=== SENSITIVITY: Excluding LA 2020 Election Quarters (COVID check) ===\n")
-no_la_covid <- incumbent_sought |>
+no_la_covid <- incumbent_sought_full |>
   filter(!(County.x == "Los Angeles" & Quarter %in% c("2020 Q3 Court", "2020 Q4 Court")))
 
-m3_nola <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+m3_nola <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
                  data = no_la_covid, cluster = ~County.x)
 
-etable(m3, m3_nola,
+print(etable(m3, m3_nola,
        headers = c("Incumbent Sought", "Excl. LA 2020"),
-       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"))
+       keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
 
 etable(m3, m3_nola,
        headers = c("Incumbent Sought", "Excl. LA 2020"),
-       keep    = c("Election_Year", "Decarceratory", "Election_Year:Decarceratory"),
+       keep    = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"),
        depvar  = TRUE,
        file    = "table3_covid_sensitivity.tex")
 cat("Table exported: table3_covid_sensitivity.tex\n")
@@ -202,29 +195,39 @@ real_elections <- all_elections |>
   distinct() |>
   mutate(placebo_year = year - 2)  # shift back 2 years
 
-# Build placebo Election_Year flag
-placebo_df <- all_elections |>
-  mutate(year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter)),
-         qnum = as.integer(sub(".*Q(\\d).*", "\\1", Quarter))) |>
+# Build placebo Election_Year_Full flag: all 4 quarters of placebo year
+placebo_df <- df |>
+  mutate(year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter))) |>
   left_join(real_elections |> select(County.x, placebo_year), by = "County.x") |>
   mutate(
-    Placebo_Election = as.integer(!is.na(placebo_year) & year == placebo_year & qnum %in% c(3, 4))
+    Placebo_Election = as.integer(!is.na(placebo_year) & year == placebo_year)
   ) |>
-  select(-year, -qnum, -placebo_year)
+  select(-year, -placebo_year) |>
+  mutate(
+    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+    Contested = as.integer(Contested),
+    County    = as.factor(County.x),
+    Quarter   = as.factor(Quarter)
+  )
 
-m_placebo <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | County + Quarter,
-                   data = placebo_df, cluster = ~County.x)
+placebo_incumbent_sought    <- placebo_df |> filter(Did_Incumbent_Seek_Reelection == 1)
+placebo_incumbent_contested <- placebo_df |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+
+m_placebo   <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | County + Quarter,
+                     data = placebo_incumbent_sought,    cluster = ~County.x)
+m_placebo_c <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | County + Quarter,
+                     data = placebo_incumbent_contested, cluster = ~County.x)
 
 cat("Placebo (fake election years, t-2):\n")
-etable(m3, m_placebo,
-       headers = c("Real Election Years", "Placebo (t-2)"),
-       keep    = c("Election_Year", "Placebo_Election", "Decarceratory",
-                   "Election_Year:Decarceratory", "Placebo_Election:Decarceratory"))
+print(etable(m3, m4, m_placebo, m_placebo_c,
+       headers = c("Real (Sought)", "Real (Contested)", "Placebo (Sought)", "Placebo (Contested)"),
+       keep    = c("Election_Year_Full", "Placebo_Election", "Decarceratory",
+                   "Election_Year_Full:Decarceratory", "Placebo_Election:Decarceratory")))
 
-etable(m1, m_placebo,
+etable(m4, m_placebo_c,
        headers = c("Real Election Years", "Placebo (t-2)"),
-       keep    = c("Election_Year", "Placebo_Election", "Decarceratory",
-                   "Election_Year:Decarceratory", "Placebo_Election:Decarceratory"),
+       keep    = c("Election_Year_Full", "Placebo_Election", "Decarceratory",
+                   "Election_Year_Full:Decarceratory", "Placebo_Election:Decarceratory"),
        depvar  = TRUE,
        file    = "table4_placebo.tex")
 cat("Table exported: table4_placebo.tex\n")
