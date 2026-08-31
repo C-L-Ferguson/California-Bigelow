@@ -264,3 +264,57 @@ etable(m_combined_sought, m_combined_contested,
 cat("Table exported: table5_post_election.tex\n")
 cat("Interpretation: Negative Election_Year interaction + null/positive Post_Election interaction\n")
 cat("= effect is temporary (electoral strategy). Persistent negative = genuine commitment.\n")
+
+# =============================================================================
+# LEAVE-ONE-OUT CHECK: Is the result driven by a single county?
+# Re-runs m4 (Incumbent + Contested) dropping one county at a time.
+# If the interaction survives dropping any single county, the result is not
+# a one-county story. If it collapses when dropping LA or SF, flag that.
+# =============================================================================
+
+cat("\n=== LEAVE-ONE-OUT CHECK: Primary result (Incumbent + Contested) ===\n")
+
+# First: show exactly which county-quarters are identifying the key cell
+cat("Key identifying observations (Decarceratory=1, Election_Year=1, Incumbent+Contested):\n")
+print(
+  incumbent_contested |>
+    filter(Election_Year == 1, Decarceratory == 1) |>
+    select(County.x, Quarter, Percentage_Prison) |>
+    arrange(County.x, Quarter)
+)
+
+# Leave-one-out: drop each county and re-run m4
+counties_in_sample <- unique(incumbent_contested$County.x)
+
+loo_results <- lapply(counties_in_sample, function(co) {
+  dat <- incumbent_contested |> filter(County.x != co)
+  tryCatch({
+    fit <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+                 data = dat, cluster = ~County.x)
+    data.frame(
+      Dropped    = co,
+      N          = nrow(dat),
+      coef       = coef(fit)["Election_Year:Decarceratory"],
+      se         = se(fit)["Election_Year:Decarceratory"],
+      pval       = pvalue(fit)["Election_Year:Decarceratory"]
+    )
+  }, error = function(e) {
+    data.frame(Dropped = co, N = nrow(dat), coef = NA, se = NA, pval = NA)
+  })
+})
+
+loo_df <- do.call(rbind, loo_results) |>
+  mutate(
+    sig   = ifelse(!is.na(pval) & pval < 0.05, "*",
+            ifelse(!is.na(pval) & pval < 0.10, ".", "")),
+    coef  = round(coef, 3),
+    se    = round(se,   3),
+    pval  = round(pval, 3)
+  ) |>
+  arrange(coef)
+
+cat("\nLeave-one-out results (sorted by coefficient):\n")
+print(loo_df, row.names = FALSE)
+cat("\nFull sample (m4): coef =", round(coef(m4)["Election_Year:Decarceratory"], 3),
+    " se =", round(se(m4)["Election_Year:Decarceratory"], 3), "\n")
+cat("If all leave-one-out coefficients are negative, the result is not county-specific.\n")
