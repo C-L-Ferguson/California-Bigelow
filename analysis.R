@@ -218,14 +218,14 @@ m_placebo   <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | Coun
 m_placebo_c <- feols(Percentage_Prison ~ Placebo_Election * Decarceratory | County + Quarter,
                      data = placebo_incumbent_contested, cluster = ~County.x)
 
-cat("Placebo (fake election years, t-2):\n")
+cat("Placebo (fake election years, t-1 — year before election):\n")
 print(etable(m3, m4, m_placebo, m_placebo_c,
        headers = c("Real (Sought)", "Real (Contested)", "Placebo (Sought)", "Placebo (Contested)"),
        keep    = c("Election_Year_Full", "Placebo_Election", "Decarceratory",
                    "Election_Year_Full:Decarceratory", "Placebo_Election:Decarceratory")))
 
 etable(m4, m_placebo_c,
-       headers = c("Real Election Years", "Placebo (t-2)"),
+       headers = c("Real Election Years", "Placebo (t-1)"),
        keep    = c("Election_Year_Full", "Placebo_Election", "Decarceratory",
                    "Election_Year_Full:Decarceratory", "Placebo_Election:Decarceratory"),
        depvar  = TRUE,
