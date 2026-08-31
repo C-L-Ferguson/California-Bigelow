@@ -324,28 +324,28 @@ cat("= effect is temporary (electoral strategy). Persistent negative = genuine c
 cat("\n=== LEAVE-ONE-OUT CHECK: Primary result (Incumbent + Contested) ===\n")
 
 # First: show exactly which county-quarters are identifying the key cell
-cat("Key identifying observations (Decarceratory=1, Election_Year=1, Incumbent+Contested):\n")
+cat("Key identifying observations (Decarceratory=1, Election_Year_Full=1, Incumbent+Contested):\n")
 print(
-  incumbent_contested |>
-    filter(Election_Year == 1, Decarceratory == 1) |>
+  incumbent_contested_full |>
+    filter(Election_Year_Full == 1, Decarceratory == 1) |>
     select(County.x, Quarter, Percentage_Prison) |>
     arrange(County.x, Quarter)
 )
 
 # Leave-one-out: drop each county and re-run m4
-counties_in_sample <- unique(incumbent_contested$County.x)
+counties_in_sample <- unique(incumbent_contested_full$County.x)
 
 loo_results <- lapply(counties_in_sample, function(co) {
-  dat <- incumbent_contested |> filter(County.x != co)
+  dat <- incumbent_contested_full |> filter(County.x != co)
   tryCatch({
-    fit <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+    fit <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
                  data = dat, cluster = ~County.x)
     data.frame(
       Dropped    = co,
       N          = nrow(dat),
-      coef       = coef(fit)["Election_Year:Decarceratory"],
-      se         = se(fit)["Election_Year:Decarceratory"],
-      pval       = pvalue(fit)["Election_Year:Decarceratory"]
+      coef       = coef(fit)["Election_Year_Full:Decarceratory"],
+      se         = se(fit)["Election_Year_Full:Decarceratory"],
+      pval       = pvalue(fit)["Election_Year_Full:Decarceratory"]
     )
   }, error = function(e) {
     data.frame(Dropped = co, N = nrow(dat), coef = NA, se = NA, pval = NA)
@@ -364,6 +364,6 @@ loo_df <- do.call(rbind, loo_results) |>
 
 cat("\nLeave-one-out results (sorted by coefficient):\n")
 print(loo_df, row.names = FALSE)
-cat("\nFull sample (m4): coef =", round(coef(m4)["Election_Year:Decarceratory"], 3),
-    " se =", round(se(m4)["Election_Year:Decarceratory"], 3), "\n")
+cat("\nFull sample (m4): coef =", round(coef(m4)["Election_Year_Full:Decarceratory"], 3),
+    " se =", round(se(m4)["Election_Year_Full:Decarceratory"], 3), "\n")
 cat("If all leave-one-out coefficients are negative, the result is not county-specific.\n")
