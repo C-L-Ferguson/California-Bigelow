@@ -89,42 +89,98 @@ ggsave("figure1a_event_study.png", fig1a, width = 8, height = 5, dpi = 300)
 cat("Figure 1a (event study) saved.\n")
 
 # =============================================================================
-# FIGURE 1b: Before/After Bar Chart (simple, law-review-friendly)
-# Average prison rate for each DA type in election vs. non-election quarters.
+# FIGURE 1b: Regression-Adjusted Margins Plot
+# Shows predicted prison rate by DA type and electoral period, controlling for
+# county and quarter fixed effects. Derived from the primary regression (m4).
+# This is what the data actually show after absorbing county-level differences.
 # =============================================================================
 
-# Use incumbent_contested subsample — primary specification
-bar_df <- df |>
-  filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1,
-         !is.na(Percentage_Prison), !is.na(Decarceratory), Decarceratory %in% c(0,1))
+# Requires fixest — loaded below in Figure 4 block, but load here too
+library(fixest)
 
-bar_data <- bar_df |>
+df_reg_1b <- df |>
   mutate(
-    DA_type   = ifelse(Decarceratory == 1, "Decarceratory DA", "Non-Decarceratory DA"),
-    Period    = ifelse(Election_Year == 1, "Election Quarters\n(Q3–Q4)", "Non-Election\nQuarters")
-  ) |>
-  group_by(DA_type, Period) |>
-  summarise(
-    mean_prison = mean(Percentage_Prison, na.rm = TRUE),
-    se_prison   = sd(Percentage_Prison, na.rm = TRUE) / sqrt(n()),
-    .groups = "drop"
-  ) |>
-  mutate(Period = factor(Period, levels = c("Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)")))
+    Election_Year = as.integer(Election_Year),
+    Decarceratory = as.integer(Decarceratory),
+    Contested     = as.integer(Contested),
+    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+    County        = as.factor(County.x),
+    Quarter       = as.factor(Quarter),
+    time          = as.numeric(X)
+  )
 
-fig1b <- ggplot(bar_data, aes(x = Period, y = mean_prison, fill = DA_type)) +
-  geom_col(position = position_dodge(width = 0.6), width = 0.5) +
-  geom_text(aes(label = paste0(round(mean_prison, 1), "%"),
-                y = mean_prison + 0.5),
-            position = position_dodge(width = 0.6), size = 3.5, color = "grey30") +
-  scale_fill_manual(values = pal) +
-  scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.08))) +
+incumbent_contested_1b <- df_reg_1b |>
+  filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+
+m4_1b <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+               data = incumbent_contested_1b, cluster = ~County.x)
+
+# Build a prediction grid: 4 cells (2 DA types x 2 periods)
+# Use the grand mean of the within-county demeaned outcome as the baseline;
+# predictions are marginal effects relative to the intercept.
+# Simpler approach: extract coefficients and compute predicted margins manually.
+b <- coef(m4_1b)
+# b["Election_Year"]               = non-decarc DA change in election quarter
+# b["Decarceratory"]               = decarc baseline difference (nuisance)
+# b["Election_Year:Decarceratory"] = interaction (key estimate)
+
+# Reference level: non-decarc DA, non-election quarter = 0 (absorbed by FEs)
+# We want to show directional change, centered at non-decarc non-election = 0
+margins_data <- data.frame(
+  DA_type       = c("Non-Decarceratory DA", "Non-Decarceratory DA",
+                    "Decarceratory DA",     "Decarceratory DA"),
+  Period        = c("Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)",
+                    "Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)"),
+  Decarceratory = c(0, 0, 1, 1),
+  Election_Year = c(0, 1, 0, 1)
+) |>
+  mutate(
+    predicted = (b["Election_Year"]               * Election_Year) +
+                (b["Decarceratory"]               * Decarceratory) +
+                (b["Election_Year:Decarceratory"] * Election_Year * Decarceratory),
+    Period = factor(Period, levels = c("Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)"))
+  )
+
+# SE for each margin via delta method
+vcv <- vcov(m4_1b)
+
+se_for_margin <- function(decarc, elec) {
+  # gradient vector: [Election_Year, Decarceratory, interaction]
+  g <- c(elec, decarc, elec * decarc)
+  names(g) <- c("Election_Year", "Decarceratory", "Election_Year:Decarceratory")
+  vars <- names(g)
+  v <- vcv[vars, vars]
+  sqrt(as.numeric(t(g) %*% v %*% g))
+}
+
+margins_data <- margins_data |>
+  rowwise() |>
+  mutate(se = se_for_margin(Decarceratory, Election_Year)) |>
+  ungroup() |>
+  mutate(
+    lo95 = predicted - 1.96 * se,
+    hi95 = predicted + 1.96 * se
+  )
+
+fig1b <- ggplot(margins_data,
+                aes(x = Period, y = predicted, color = DA_type, group = DA_type)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey70", linewidth = 0.4) +
+  geom_line(linewidth = 0.9, position = position_dodge(width = 0.15)) +
+  geom_point(aes(shape = DA_type), size = 4,
+             position = position_dodge(width = 0.15)) +
+  geom_errorbar(aes(ymin = lo95, ymax = hi95),
+                width = 0.08, linewidth = 0.7,
+                position = position_dodge(width = 0.15)) +
+  scale_color_manual(values = pal) +
+  scale_shape_manual(values = c("Decarceratory DA" = 16, "Non-Decarceratory DA" = 17)) +
+  scale_y_continuous(labels = function(x) paste0(x, "pp")) +
   labs(
-    title    = "Prison Sentence Rate: Election vs. Non-Election Quarters",
-    subtitle = "Incumbent-sought, contested races only (primary specification)",
+    title    = "Predicted Prison Sentencing: Election vs. Non-Election Quarters",
+    subtitle = "Regression-adjusted marginal effects (county & quarter FEs absorbed)\nIncumbent-sought, contested races — primary specification",
     x        = NULL,
-    y        = "% Sentenced to Prison",
-    fill     = NULL,
-    caption  = "Incumbent-sought, contested elections only. Error bars = 95% CI."
+    y        = "Predicted change in prison rate (pp, relative to baseline)",
+    color    = NULL, shape = NULL,
+    caption  = "Estimated from OLS with county and quarter fixed effects, clustered SEs by county.\nPoints = predicted margins. Bars = 95% CI. Non-decarceratory, non-election = 0 reference."
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -132,96 +188,13 @@ fig1b <- ggplot(bar_data, aes(x = Period, y = mean_prison, fill = DA_type)) +
     panel.grid.minor   = element_blank(),
     panel.grid.major.x = element_blank(),
     plot.caption       = element_text(color = "grey50", size = 9),
-    plot.title         = element_text(face = "bold")
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(color = "grey40", size = 10)
   )
 
-ggsave("figure1b_bar_chart.pdf", fig1b, width = 7, height = 5)
-ggsave("figure1b_bar_chart.png", fig1b, width = 7, height = 5, dpi = 300)
-cat("Figure 1b (bar chart) saved.\n")
-
-# =============================================================================
-# FIGURE 1c: Difference Chart
-# Shows change in prison rate from non-election to election quarters by DA type.
-# Makes the divergence in direction immediately legible.
-# =============================================================================
-
-diff_data <- bar_data |>
-  select(DA_type, Period, mean_prison) |>
-  mutate(Period = ifelse(grepl("Election Quarters", as.character(Period)), "Election", "NonElection")) |>
-  tidyr::pivot_wider(names_from = Period, values_from = mean_prison) |>
-  mutate(change = Election - NonElection)
-
-fig1c <- ggplot(diff_data, aes(x = DA_type, y = change, fill = DA_type)) +
-  geom_col(width = 0.5) +
-  geom_hline(yintercept = 0, linewidth = 0.6, color = "grey40") +
-  geom_text(aes(label = paste0(ifelse(change > 0, "+", ""), round(change, 1), "pp"),
-                vjust = ifelse(change < 0, 1.5, -0.5)),
-            size = 4, color = "grey20") +
-  scale_fill_manual(values = pal) +
-  scale_y_continuous(labels = function(x) paste0(x, "pp"),
-                     limits = c(-5, 3)) +
-  labs(
-    title    = "Change in Prison Sentence Rate During Election Quarters",
-    subtitle = "Percentage-point change from non-election to election quarters (Q3–Q4)",
-    x        = NULL,
-    y        = "Change in % Sentenced to Prison (pp)",
-    fill     = NULL,
-    caption  = "Negative values indicate lower prison sentencing in election quarters relative to non-election quarters."
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    legend.position    = "none",
-    panel.grid.minor   = element_blank(),
-    panel.grid.major.x = element_blank(),
-    plot.caption       = element_text(color = "grey50", size = 9),
-    plot.title         = element_text(face = "bold")
-  )
-
-ggsave("figure1c_difference_chart.pdf", fig1c, width = 6, height = 5)
-ggsave("figure1c_difference_chart.png", fig1c, width = 6, height = 5, dpi = 300)
-cat("Figure 1c (difference chart) saved.\n")
-
-# =============================================================================
-# FIGURE 1d: Relative Change Chart
-# Shows % change in prison rate relative to each group's own non-election baseline.
-# Normalizes for different baseline rates between DA types.
-# =============================================================================
-
-rel_data <- diff_data |>
-  mutate(
-    baseline     = NonElection,
-    rel_change   = (change / baseline) * 100
-  )
-
-fig1d <- ggplot(rel_data, aes(x = DA_type, y = rel_change, fill = DA_type)) +
-  geom_col(width = 0.5) +
-  geom_hline(yintercept = 0, linewidth = 0.6, color = "grey40") +
-  geom_text(aes(label = paste0(ifelse(rel_change > 0, "+", ""), round(rel_change, 1), "%"),
-                vjust = ifelse(rel_change < 0, 1.5, -0.5)),
-            size = 4, color = "grey20") +
-  scale_fill_manual(values = pal) +
-  scale_y_continuous(labels = function(x) paste0(x, "%"),
-                     limits = c(-10, 6)) +
-  labs(
-    title    = "Relative Change in Prison Sentence Rate During Election Quarters",
-    subtitle = "% change from each group's own non-election baseline",
-    x        = NULL,
-    y        = "Relative Change in Prison Rate (%)",
-    fill     = NULL,
-    caption  = "Calculated from group means. Negative values indicate lower prison sentencing in election quarters.\nNot derived directly from regression coefficients."
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    legend.position    = "none",
-    panel.grid.minor   = element_blank(),
-    panel.grid.major.x = element_blank(),
-    plot.caption       = element_text(color = "grey50", size = 9),
-    plot.title         = element_text(face = "bold")
-  )
-
-ggsave("figure1d_relative_change.pdf", fig1d, width = 6, height = 5)
-ggsave("figure1d_relative_change.png", fig1d, width = 6, height = 5, dpi = 300)
-cat("Figure 1d (relative change chart) saved.\n")
+ggsave("figure1b_margins_plot.pdf", fig1b, width = 7, height = 5)
+ggsave("figure1b_margins_plot.png", fig1b, width = 7, height = 5, dpi = 300)
+cat("Figure 1b (regression-adjusted margins plot) saved.\n")
 
 # =============================================================================
 # FIGURE 2a: County Trends — Raw (original)
