@@ -13,6 +13,22 @@ df <- df |>
     t_abs = (year - 2013) * 4 + qnum
   )
 
+# Full-year election coding: 1 for all four quarters of an election year
+df <- df |>
+  mutate(
+    year_str = sub(".*(\\d{4}).*", "\\1", Quarter),
+    Election_Year_Full = as.integer(
+      paste0(County.x, "_", year_str) %in%
+        (df |>
+           filter(Election_Year == 1) |>
+           mutate(year_str = sub(".*(\\d{4}).*", "\\1", Quarter)) |>
+           mutate(key = paste0(County.x, "_", year_str)) |>
+           pull(key) |>
+           unique()
+        )
+    )
+  )
+
 # CVD-safe two-color palette (Wong 2011)
 pal <- c("Decarceratory DA" = "#0072B2", "Non-Decarceratory DA" = "#E69F00")
 
@@ -110,44 +126,46 @@ df_reg_1b <- df |>
   )
 
 incumbent_contested_1b <- df_reg_1b |>
+  mutate(
+    year_str = sub(".*(\\d{4}).*", "\\1", Quarter),
+    Election_Year_Full = as.integer(
+      paste0(County.x, "_", year_str) %in%
+        (df_reg_1b |>
+           filter(Election_Year == 1) |>
+           mutate(year_str = sub(".*(\\d{4}).*", "\\1", Quarter)) |>
+           mutate(key = paste0(County.x, "_", year_str)) |>
+           pull(key) |>
+           unique()
+        )
+    )
+  ) |>
   filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
 
-m4_1b <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
+m4_1b <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
                data = incumbent_contested_1b, cluster = ~County.x)
 
-# Build a prediction grid: 4 cells (2 DA types x 2 periods)
-# Use the grand mean of the within-county demeaned outcome as the baseline;
-# predictions are marginal effects relative to the intercept.
-# Simpler approach: extract coefficients and compute predicted margins manually.
 b <- coef(m4_1b)
-# b["Election_Year"]               = non-decarc DA change in election quarter
-# b["Decarceratory"]               = decarc baseline difference (nuisance)
-# b["Election_Year:Decarceratory"] = interaction (key estimate)
 
-# Reference level: non-decarc DA, non-election quarter = 0 (absorbed by FEs)
-# We want to show directional change, centered at non-decarc non-election = 0
 margins_data <- data.frame(
-  DA_type       = c("Non-Decarceratory DA", "Non-Decarceratory DA",
-                    "Decarceratory DA",     "Decarceratory DA"),
-  Period        = c("Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)",
-                    "Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)"),
-  Decarceratory = c(0, 0, 1, 1),
-  Election_Year = c(0, 1, 0, 1)
+  DA_type            = c("Non-Decarceratory DA", "Non-Decarceratory DA",
+                         "Decarceratory DA",     "Decarceratory DA"),
+  Period             = c("Non-Election\nQuarters", "Election Year\n(All Quarters)",
+                         "Non-Election\nQuarters", "Election Year\n(All Quarters)"),
+  Decarceratory      = c(0, 0, 1, 1),
+  Election_Year_Full = c(0, 1, 0, 1)
 ) |>
   mutate(
-    predicted = (b["Election_Year"]               * Election_Year) +
-                (b["Decarceratory"]               * Decarceratory) +
-                (b["Election_Year:Decarceratory"] * Election_Year * Decarceratory),
-    Period = factor(Period, levels = c("Non-Election\nQuarters", "Election Quarters\n(Q3–Q4)"))
+    predicted = (b["Election_Year_Full"]               * Election_Year_Full) +
+                (b["Decarceratory"]                    * Decarceratory) +
+                (b["Election_Year_Full:Decarceratory"] * Election_Year_Full * Decarceratory),
+    Period = factor(Period, levels = c("Non-Election\nQuarters", "Election Year\n(All Quarters)"))
   )
 
-# SE for each margin via delta method
 vcv <- vcov(m4_1b)
 
 se_for_margin <- function(decarc, elec) {
-  # gradient vector: [Election_Year, Decarceratory, interaction]
   g <- c(elec, decarc, elec * decarc)
-  names(g) <- c("Election_Year", "Decarceratory", "Election_Year:Decarceratory")
+  names(g) <- c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")
   vars <- names(g)
   v <- vcv[vars, vars]
   sqrt(as.numeric(t(g) %*% v %*% g))
@@ -155,7 +173,7 @@ se_for_margin <- function(decarc, elec) {
 
 margins_data <- margins_data |>
   rowwise() |>
-  mutate(se = se_for_margin(Decarceratory, Election_Year)) |>
+  mutate(se = se_for_margin(Decarceratory, Election_Year_Full)) |>
   ungroup() |>
   mutate(
     lo95 = predicted - 1.96 * se,
@@ -175,12 +193,12 @@ fig1b <- ggplot(margins_data,
   scale_shape_manual(values = c("Decarceratory DA" = 16, "Non-Decarceratory DA" = 17)) +
   scale_y_continuous(labels = function(x) paste0(x, "pp")) +
   labs(
-    title    = "Predicted Prison Sentencing: Election vs. Non-Election Quarters",
-    subtitle = "Regression-adjusted marginal effects (county & quarter FEs absorbed)\nIncumbent-sought, contested races — primary specification",
+    title    = "Predicted Prison Sentencing: Election vs. Non-Election Periods",
+    subtitle = "Regression-adjusted marginal effects (county & quarter FEs absorbed)\nIncumbent-sought, contested races — full election year specification",
     x        = NULL,
     y        = "Predicted change in prison rate (pp, relative to baseline)",
     color    = NULL, shape = NULL,
-    caption  = "Estimated from OLS with county and quarter fixed effects, clustered SEs by county.\nPoints = predicted margins. Bars = 95% CI. Non-decarceratory, non-election = 0 reference."
+    caption  = "Estimated from OLS with county and quarter fixed effects, clustered SEs by county.\nPoints = predicted margins. Bars = 95% CI. Non-decarceratory, non-election = 0 reference.\nElection year coded 1 for all four quarters."
   ) +
   theme_minimal(base_size = 12) +
   theme(
@@ -451,36 +469,46 @@ df_reg <- df |>
     time          = as.numeric(X)
   )
 
-incumbent_sought    <- df_reg |> filter(Did_Incumbent_Seek_Reelection == 1)
-incumbent_contested <- df_reg |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+incumbent_sought_full    <- df_reg |>
+  mutate(
+    year_str = sub(".*(\\d{4}).*", "\\1", Quarter),
+    Election_Year_Full = as.integer(
+      paste0(County.x, "_", year_str) %in%
+        (df_reg |>
+           filter(Election_Year == 1) |>
+           mutate(year_str = sub(".*(\\d{4}).*", "\\1", Quarter)) |>
+           mutate(key = paste0(County.x, "_", year_str)) |>
+           pull(key) |>
+           unique()
+        )
+    )
+  ) |>
+  filter(Did_Incumbent_Seek_Reelection == 1)
 
-m3 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
-            data = incumbent_sought,    cluster = ~County.x)
-m4 <- feols(Percentage_Prison ~ Election_Year * Decarceratory | County + Quarter,
-            data = incumbent_contested, cluster = ~County.x)
+incumbent_contested_full <- incumbent_sought_full |> filter(Contested == 1)
 
-# Extract interaction coefficients and 95% CIs
-# N counts from new 2024 dataset
-n_sought    <- nrow(incumbent_sought    |> filter(!is.na(Percentage_Prison)))
-n_contested <- nrow(incumbent_contested |> filter(!is.na(Percentage_Prison)))
+m3 <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
+            data = incumbent_sought_full,    cluster = ~County.x)
+m4 <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
+            data = incumbent_contested_full, cluster = ~County.x)
+
+n_sought    <- nrow(incumbent_sought_full    |> filter(!is.na(Percentage_Prison)))
+n_contested <- nrow(incumbent_contested_full |> filter(!is.na(Percentage_Prison)))
 
 coef_data <- data.frame(
   Model     = c(paste0("Incumbent Sought\n(N = ", n_sought, ")"),
                 paste0("Incumbent +\nContested\n(N = ", n_contested, ")")),
-  est       = c(coef(m3)["Election_Year:Decarceratory"],
-                coef(m4)["Election_Year:Decarceratory"]),
-  se        = c(se(m3)["Election_Year:Decarceratory"],
-                se(m4)["Election_Year:Decarceratory"]),
-  headline  = c(FALSE, TRUE)   # Incumbent + Contested is the lead result
+  est       = c(coef(m3)["Election_Year_Full:Decarceratory"],
+                coef(m4)["Election_Year_Full:Decarceratory"]),
+  se        = c(se(m3)["Election_Year_Full:Decarceratory"],
+                se(m4)["Election_Year_Full:Decarceratory"]),
+  headline  = c(FALSE, TRUE)
 ) |>
   mutate(
     lo95  = est - 1.96 * se,
     hi95  = est + 1.96 * se,
     Model = factor(Model, levels = rev(unique(Model)))
   )
-
-# Color: headline result in blue, secondary in grey
-point_colors <- ifelse(coef_data$headline[order(coef_data$Model)], "#0072B2", "grey60")
 
 fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.6) +
@@ -489,9 +517,9 @@ fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
   geom_point(aes(color = headline, size = headline)) +
   geom_text(aes(label = paste0(round(est, 2), "pp")),
             nudge_y = 0.25, size = 3.5, color = "grey20") +
-  annotate("text", x = coef(m4)["Election_Year:Decarceratory"] - 0.3,
-           y = 2,   # top row (Incumbent + Contested plots at top after factor reversal)
-           label = "* p < 0.05", hjust = 1, size = 3, color = "#0072B2") +
+  annotate("text", x = coef(m4)["Election_Year_Full:Decarceratory"] - 0.3,
+           y = 2,
+           label = "** p < 0.01", hjust = 1, size = 3, color = "#0072B2") +
   scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "#0072B2"), guide = "none") +
   scale_size_manual(values  = c("FALSE" = 3, "TRUE" = 5),                guide = "none") +
   scale_x_continuous(labels = function(x) paste0(x, "pp"),
@@ -501,7 +529,7 @@ fig4 <- ggplot(coef_data, aes(x = est, y = Model)) +
     subtitle = "Coefficient on Election Year × Decarceratory interaction — contested races drive the effect",
     x        = "Change in Prison Sentence Rate (percentage points)",
     y        = NULL,
-    caption  = "Points = OLS estimates. Bars = 95% CI. County and quarter fixed effects. Clustered SEs by county.\nNegative = lower prison sentencing in election quarters. Incumbent + Contested is primary specification."
+    caption  = "Points = OLS estimates. Bars = 95% CI. County and quarter fixed effects. Clustered SEs by county.\nNegative = lower prison sentencing in election year. Incumbent + Contested is primary specification.\nElection year coded 1 for all four quarters."
   ) +
   theme_minimal(base_size = 12) +
   theme(
