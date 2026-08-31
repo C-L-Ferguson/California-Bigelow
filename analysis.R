@@ -27,6 +27,26 @@ incumbent_sought <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
 # Incumbent sought + contested: sharpest test — incumbent personally on ballot AND facing a challenger
 incumbent_contested <- df |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
 
+# --- Full-year coding: Election_Year_Full = 1 for ALL four quarters of election year ---
+# Expands treatment window beyond Q3/Q4; tests whether effect is present throughout election year
+df <- df |>
+  mutate(
+    year_str = sub(".*(\\d{4}).*", "\\1", Quarter),
+    Election_Year_Full = as.integer(
+      paste0(County.x, "_", year_str) %in%
+        (df |>
+           filter(Election_Year == 1) |>
+           mutate(year_str = sub(".*(\\d{4}).*", "\\1", Quarter)) |>
+           mutate(key = paste0(County.x, "_", year_str)) |>
+           pull(key) |>
+           unique()
+        )
+    )
+  )
+
+incumbent_sought_full    <- df |> filter(Did_Incumbent_Seek_Reelection == 1)
+incumbent_contested_full <- df |> filter(Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+
 # =============================================================================
 # PRIMARY OUTCOME: Percentage_Prison
 # Key finding: negative interaction = decarceratory DAs become LESS punitive
@@ -67,6 +87,32 @@ etable(m3_trend, m4_trend,
        file      = "table1_prison_trends.tex")
 
 cat("Tables exported: table1_prison_baseline.tex, table1_prison_trends.tex\n")
+
+# =============================================================================
+# FULL-YEAR CODING: Election_Year_Full = 1 for all four quarters of election year
+# Tests whether expanding the treatment window changes results.
+# If coefficient is similar or larger → effect extends throughout election year.
+# If it attenuates → effect is concentrated in Q3/Q4 only.
+# =============================================================================
+
+cat("\n=== FULL-YEAR CODING COMPARISON ===\n")
+
+m3_full <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
+                 data = incumbent_sought_full,    cluster = ~County.x)
+m4_full <- feols(Percentage_Prison ~ Election_Year_Full * Decarceratory | County + Quarter,
+                 data = incumbent_contested_full, cluster = ~County.x)
+
+cat("Q3/Q4 only (original) vs. Full-year coding — Incumbent + Contested:\n")
+print(etable(m4, m4_full,
+       headers = c("Q3/Q4 Only", "Full Year"),
+       keep    = c("Election_Year", "Election_Year_Full", "Decarceratory",
+                   "Election_Year:Decarceratory", "Election_Year_Full:Decarceratory")))
+
+cat("\nIncumbent Sought:\n")
+print(etable(m3, m3_full,
+       headers = c("Q3/Q4 Only", "Full Year"),
+       keep    = c("Election_Year", "Election_Year_Full", "Decarceratory",
+                   "Election_Year:Decarceratory", "Election_Year_Full:Decarceratory")))
 
 # =============================================================================
 # ADDITIONAL OUTCOMES
