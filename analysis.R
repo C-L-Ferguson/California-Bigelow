@@ -176,10 +176,10 @@ etable(m3, m3_nola,
 cat("Table exported: table3_covid_sensitivity.tex\n")
 
 # =============================================================================
-# PLACEBO TEST: Fake election years (t-2 shift)
-# Assigns "election year" status to quarters two years before the actual
-# election year. If the regression finds a similar interaction in fake election
-# years, the result may reflect pre-existing trends rather than electoral behavior.
+# PLACEBO TEST: Fake election years (t-1 shift)
+# Assigns "election year" status to the year immediately before the actual
+# election year. If the regression finds a similar interaction in the pre-election
+# year, the result may reflect pre-existing trends rather than electoral behavior.
 # A null placebo result strengthens the causal interpretation.
 # =============================================================================
 
@@ -193,7 +193,7 @@ real_elections <- all_elections |>
   ) |>
   select(County.x, year) |>
   distinct() |>
-  mutate(placebo_year = year - 2)  # shift back 2 years
+  mutate(placebo_year = year - 1)  # shift back 1 year (year immediately before election)
 
 # Build placebo Election_Year_Full flag: all 4 quarters of placebo year
 placebo_df <- df |>
