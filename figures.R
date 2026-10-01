@@ -1,8 +1,10 @@
 library(dplyr)
 library(ggplot2)
 
+base_Dissertation <- "https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelow/claude/criminal-law-effects-analysis-jkvg2m"
+
 # Load data
-df <- read.csv("https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelow/claude/dataset-review-l0rluy/CA_Merged_Data_2024.csv")
+df <- read.csv(paste0(base_Dissertation, "/CA_Merged_Data_2024.csv"))
 
 df <- df |>
   mutate(
@@ -785,8 +787,8 @@ cat("Figure 6 (per-county event studies) saved.\n")
 
 library(zoo)
 
-ny_raw <- read.csv("NY_Merged_Data_recoded.csv")
-pa_raw <- read.csv("PA_Merged_Data_FEB.csv")
+ny_raw <- read.csv(paste0(base_Dissertation, "/NY_Merged_Data_recoded.csv"))
+pa_raw <- read.csv(paste0(base_Dissertation, "/PA_Merged_Data_FEB.csv"))
 
 prep_state <- function(raw, state_name, county_col, quarter_col, prison_col) {
   raw |>

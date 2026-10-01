@@ -1,8 +1,10 @@
 library(fixest)
 library(dplyr)
 
+base_Dissertation <- "https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelow/claude/criminal-law-effects-analysis-jkvg2m"
+
 # Load data
-df <- read.csv("https://raw.githubusercontent.com/C-L-Ferguson/California-Bigelow/claude/dataset-review-l0rluy/CA_Merged_Data_2024.csv")
+df <- read.csv(paste0(base_Dissertation, "/CA_Merged_Data_2024.csv"))
 
 # Coerce variable types; County.x is the county identifier in this merged dataset
 df <- df |>
@@ -386,8 +388,8 @@ cat("Table exported: table_volume_check.tex\n")
 cat("\n=== MULTI-STATE CASE VOLUME ANALYSIS ===\n")
 
 # Load NY and PA datasets
-ny_raw <- read.csv("NY_Merged_Data_recoded.csv")
-pa_raw <- read.csv("PA_Merged_Data_FEB.csv")
+ny_raw <- read.csv(paste0(base_Dissertation, "/NY_Merged_Data_recoded.csv"))
+pa_raw <- read.csv(paste0(base_Dissertation, "/PA_Merged_Data_FEB.csv"))
 
 # Harmonize CA
 ca_ms <- df |>
