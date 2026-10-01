@@ -321,6 +321,64 @@ cat("= effect is temporary (electoral strategy). Persistent negative = genuine c
 # a one-county story. If it collapses when dropping LA or SF, flag that.
 # =============================================================================
 
+# =============================================================================
+# CASE VOLUME ANALYSIS
+# Addresses Eric's comment 6: liberal DAs may not prosecute many low-level
+# crimes, so their sentencing pool could be compositionally different.
+# We compare total sentences per quarter (caseload volume) by DA type.
+# A smaller caseload under decarceratory DAs could mean the marginal case
+# is more serious, biasing the prison share upward even before any election.
+# =============================================================================
+
+cat("\n=== CASE VOLUME ANALYSIS (selection bias check) ===\n")
+
+# Total sentenced per quarter by DA type
+volume_summary <- df |>
+  filter(!is.na(Prison)) |>
+  mutate(
+    DA_type = ifelse(Decarceratory == 1, "Decarceratory", "Non-Decarceratory"),
+    total_sentenced = Prison + Probation + Straight_1170h + Split_1170h
+  ) |>
+  group_by(DA_type, Election_Year_Full) |>
+  summarise(
+    n_county_quarters   = n(),
+    mean_total          = mean(total_sentenced, na.rm = TRUE),
+    median_total        = median(total_sentenced, na.rm = TRUE),
+    sd_total            = sd(total_sentenced, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+cat("Mean total sentences per county-quarter by DA type and electoral period:\n")
+print(volume_summary)
+
+# Regression: does total caseload differ by DA type or election year?
+volume_df <- df |>
+  filter(!is.na(Prison)) |>
+  mutate(
+    total_sentenced = Prison + Probation + Straight_1170h + Split_1170h,
+    County          = as.factor(County.x),
+    Quarter         = as.factor(Quarter)
+  )
+
+m_volume <- feols(total_sentenced ~ Election_Year_Full * Decarceratory | County + Quarter,
+                  data = volume_df |> filter(Did_Incumbent_Seek_Reelection == 1),
+                  cluster = ~County.x)
+
+cat("\nRegression: total caseload ~ election_year * decarceratory (county + quarter FEs):\n")
+print(etable(m_volume,
+             keep = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
+
+cat("\nInterpretation: If Decarceratory coeff is negative and large, decarceratory DAs handle")
+cat("\nfewer cases per quarter — consistent with upstream declination/diversion practices.")
+cat("\nIf so, their sentencing pool is more select, and the baseline prison rate is harder")
+cat("\nto interpret as a pure sentencing preference without controlling for case composition.\n")
+
+etable(m_volume,
+       keep  = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory"),
+       depvar = TRUE,
+       file   = "table_volume_check.tex")
+cat("Table exported: table_volume_check.tex\n")
+
 cat("\n=== LEAVE-ONE-OUT CHECK: Primary result (Incumbent + Contested) ===\n")
 
 # First: show exactly which county-quarters are identifying the key cell

@@ -691,6 +691,94 @@ ggsave("figure5_baseline_comparison.pdf", fig5, width = 7, height = 5)
 ggsave("figure5_baseline_comparison.png", fig5, width = 7, height = 5, dpi = 300)
 cat("Figure 5 (baseline comparison) saved.\n")
 
+# =============================================================================
+# FIGURE 6: Per-County Event Study — Prison Rate Around Elections
+# Addresses Eric's comment 4: show within-jurisdiction changes for each
+# decarceratory county individually, so the reader can see whether the
+# aggregate result is driven by one or two outlying counties.
+# Each panel = one decarceratory county. X-axis = quarters relative to election.
+# =============================================================================
+
+library(zoo)
+
+# Identify all decarceratory counties
+decarc_counties <- df |>
+  filter(Decarceratory == 1) |>
+  pull(County.x) |>
+  unique() |>
+  sort()
+
+# Build election events: Q3 of election year = t=0 for each county-election pair
+county_election_events <- df |>
+  filter(Election_Year == 1, qnum == 3) |>
+  select(County.x, year) |>
+  distinct() |>
+  rename(election_year = year)
+
+# Build per-county event study data (±6 quarters)
+county_es <- df |>
+  inner_join(county_election_events, by = "County.x") |>
+  mutate(rel_q = (year - election_year) * 4 + (qnum - 3)) |>
+  filter(rel_q >= -6, rel_q <= 5, !is.na(Percentage_Prison)) |>
+  filter(County.x %in% decarc_counties)
+
+# Compute county-level mean for each rel_q to de-mean (center on own baseline)
+county_es <- county_es |>
+  group_by(County.x) |>
+  mutate(baseline = mean(Percentage_Prison[rel_q < 0], na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(prison_demeaned = Percentage_Prison - baseline)
+
+# Smooth within county × election pair across rel_q
+county_es_avg <- county_es |>
+  group_by(County.x, rel_q) |>
+  summarise(
+    mean_prison = mean(prison_demeaned, na.rm = TRUE),
+    se_prison   = sd(prison_demeaned, na.rm = TRUE) / sqrt(n()),
+    n           = n(),
+    .groups = "drop"
+  )
+
+fig6 <- ggplot(county_es_avg, aes(x = rel_q, y = mean_prison)) +
+  annotate("rect", xmin = -0.5, xmax = 1.5, ymin = -Inf, ymax = Inf,
+           fill = "#0072B2", alpha = 0.10) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  geom_vline(xintercept = -0.5, linetype = "dotted", color = "grey60", linewidth = 0.3) +
+  geom_vline(xintercept =  1.5, linetype = "dotted", color = "grey60", linewidth = 0.3) +
+  geom_ribbon(aes(ymin = mean_prison - 1.96 * se_prison,
+                  ymax = mean_prison + 1.96 * se_prison),
+              fill = "#0072B2", alpha = 0.15) +
+  geom_line(color = "#0072B2", linewidth = 0.9) +
+  geom_point(color = "#0072B2", size = 2) +
+  facet_wrap(~County.x, ncol = 3, scales = "free_y") +
+  scale_x_continuous(breaks = c(-6, -4, -2, 0, 2, 4),
+                     labels = c("Q3\n-2yr", "Q3\n-1yr+", "Q2\n-1yr",
+                                "Q3\nElec", "Q1\n+1yr", "Q3\n+1yr")) +
+  scale_y_continuous(labels = function(x) paste0(ifelse(x > 0, "+", ""), round(x, 0), "pp")) +
+  labs(
+    title    = "Within-County Change in Prison Sentencing Around Elections",
+    subtitle = "Decarceratory counties only. Y-axis = deviation from each county's own pre-election mean.\nShaded band = election quarters (Q3–Q4). Bands = 95% CI.",
+    x        = "Quarter Relative to Election (Q3 = t=0)",
+    y        = "Change in Prison Rate (pp vs. own baseline)",
+    caption  = paste0("N = ", length(decarc_counties), " decarceratory counties. Multiple elections per county averaged.",
+                      "\nPanel addresses whether aggregate result is driven by a single outlying jurisdiction.")
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position    = "none",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    strip.text         = element_text(face = "bold", size = 9),
+    plot.caption       = element_text(color = "grey50", size = 8),
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(color = "grey40", size = 9),
+    axis.text.x        = element_text(size = 7)
+  )
+
+ggsave("figure6_county_event_studies.pdf", fig6, width = 10, height = 8)
+ggsave("figure6_county_event_studies.png", fig6, width = 10, height = 8, dpi = 300)
+cat("Figure 6 (per-county event studies) saved.\n")
+
 # --- Table: Baseline means by DA type (non-election quarters) ---
 baseline_table <- baseline_df |>
   group_by(DA_type) |>
