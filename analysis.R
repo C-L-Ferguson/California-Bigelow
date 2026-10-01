@@ -533,3 +533,40 @@ print(loo_df, row.names = FALSE)
 cat("\nFull sample (m4): coef =", round(coef(m4)["Election_Year_Full:Decarceratory"], 3),
     " se =", round(se(m4)["Election_Year_Full:Decarceratory"], 3), "\n")
 cat("If all leave-one-out coefficients are negative, the result is not county-specific.\n")
+
+# =============================================================================
+# LEAVE-ONE-OUT: Plain OLS matching paper's primary specification
+# lm(Percentage_Prison ~ Election_Year_Full * Decarceratory)
+# Sample: incumbent_contested_full (Did_Incumbent_Seek_Reelection == 1, Contested == 1)
+# =============================================================================
+
+cat("\n=== LEAVE-ONE-OUT: Plain OLS (matches paper spec) ===\n")
+
+# Full-sample baseline
+ols_full <- lm(Percentage_Prison ~ Election_Year_Full * Decarceratory,
+               data = incumbent_contested_full)
+cat("Full sample OLS interaction coef:",
+    round(coef(ols_full)["Election_Year_Full:Decarceratory"], 4), "\n\n")
+
+counties_ols <- unique(incumbent_contested_full$County.x)
+
+loo_ols <- lapply(counties_ols, function(co) {
+  dat <- incumbent_contested_full |> filter(County.x != co)
+  fit <- lm(Percentage_Prison ~ Election_Year_Full * Decarceratory, data = dat)
+  s   <- summary(fit)$coefficients
+  data.frame(
+    Dropped = co,
+    N       = nrow(dat),
+    coef    = round(s["Election_Year_Full:Decarceratory", "Estimate"], 4),
+    se      = round(s["Election_Year_Full:Decarceratory", "Std. Error"], 4),
+    pval    = round(s["Election_Year_Full:Decarceratory", "Pr(>|t|)"], 4)
+  )
+})
+
+loo_ols_df <- do.call(rbind, loo_ols) |>
+  mutate(sig = ifelse(pval < 0.05, "*", ifelse(pval < 0.10, ".", ""))) |>
+  arrange(coef)
+
+cat("Leave-one-out results (sorted by coefficient):\n")
+print(loo_ols_df, row.names = FALSE)
+cat("\nAll negative = result not driven by any single county.\n")
