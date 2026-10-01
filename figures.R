@@ -108,6 +108,69 @@ ggsave("figure1a_event_study.png", fig1a, width = 8, height = 5, dpi = 300)
 cat("Figure 1a (event study) saved.\n")
 
 # =============================================================================
+# FIGURE 1c: Demeaned Aggregated Event Study
+# Same two-group comparison as Figure 1a but each county is first centered on
+# its own pre-election mean, so the y-axis shows change from baseline rather
+# than raw prison rate. Removes the baseline gap between groups and isolates
+# the within-county, around-election movement.
+# =============================================================================
+
+es_demeaned <- event_study |>
+  filter(!is.na(Percentage_Prison), !is.na(Decarceratory)) |>
+  mutate(DA_type = ifelse(Decarceratory == 1, "Decarceratory DA", "Non-Decarceratory DA")) |>
+  group_by(County.x, DA_type) |>
+  mutate(baseline = mean(Percentage_Prison[rel_q < 0], na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(prison_demeaned = Percentage_Prison - baseline) |>
+  group_by(rel_q, DA_type) |>
+  summarise(
+    mean_prison = mean(prison_demeaned, na.rm = TRUE),
+    se_prison   = sd(prison_demeaned,  na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+fig1c <- ggplot(es_demeaned, aes(x = rel_q, y = mean_prison,
+                                  color = DA_type, shape = DA_type, group = DA_type)) +
+  annotate("rect", xmin = -0.5, xmax = 1.5, ymin = -Inf, ymax = Inf,
+           fill = "grey90", alpha = 0.6) +
+  annotate("text", x = 0.5, y = Inf, label = "Election\nQuarters",
+           vjust = 1.5, size = 3, color = "grey40") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "grey60", linewidth = 0.4) +
+  geom_vline(xintercept =  1.5, linetype = "dashed", color = "grey60", linewidth = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "grey50", linewidth = 0.4) +
+  geom_ribbon(aes(ymin = mean_prison - 1.96 * se_prison,
+                  ymax = mean_prison + 1.96 * se_prison,
+                  fill = DA_type), alpha = 0.15, color = NA) +
+  geom_line(linewidth = 0.9) +
+  geom_point(size = 3) +
+  scale_color_manual(values = pal) +
+  scale_fill_manual(values  = pal) +
+  scale_shape_manual(values = c("Decarceratory DA" = 16, "Non-Decarceratory DA" = 17)) +
+  scale_x_continuous(breaks = -6:5, labels = quarter_labels) +
+  scale_y_continuous(labels = function(x) paste0(ifelse(x > 0, "+", ""), round(x, 1), "pp")) +
+  labs(
+    title    = "Prison Sentence Rate Around Elections: Change from Pre-Election Baseline",
+    subtitle = "Each county centered on its own pre-election mean (rel_q < 0). Dashed line = zero change.",
+    x        = "Quarter Relative to Election",
+    y        = "Change in Prison Rate (pp vs. own baseline)",
+    color    = NULL, fill = NULL, shape = NULL,
+    caption  = "Shaded region = election quarters (Q3–Q4). Bands = 95% CI.\nY-axis shows within-county deviation, removing baseline gap between groups."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position    = "top",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.caption       = element_text(color = "grey50", size = 9),
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(color = "grey40", size = 10)
+  )
+
+ggsave("figure1c_demeaned_event_study.pdf", fig1c, width = 8, height = 5)
+ggsave("figure1c_demeaned_event_study.png", fig1c, width = 8, height = 5, dpi = 300)
+cat("Figure 1c (demeaned aggregated event study) saved.\n")
+
+# =============================================================================
 # FIGURE 1b: Regression-Adjusted Margins Plot
 # Shows predicted prison rate by DA type and electoral period, controlling for
 # county and quarter fixed effects. Derived from the primary regression (m4).
