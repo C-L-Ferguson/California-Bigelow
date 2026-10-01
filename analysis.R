@@ -200,7 +200,8 @@ real_elections <- all_elections |>
 # Build placebo Election_Year_Full flag: all 4 quarters of placebo year
 placebo_df <- df |>
   mutate(year = as.integer(sub(".*(\\d{4}).*", "\\1", Quarter))) |>
-  left_join(real_elections |> select(County.x, placebo_year), by = "County.x") |>
+  left_join(real_elections |> select(County.x, placebo_year), by = "County.x",
+            relationship = "many-to-many") |>
   mutate(
     Placebo_Election = as.integer(!is.na(placebo_year) & year == placebo_year)
   ) |>
@@ -261,7 +262,7 @@ post_df <- all_elections |>
     qnum = as.integer(sub(".*Q(\\d).*", "\\1", Quarter))
   ) |>
   left_join(election_years_by_county |> select(County.x, post_year),
-            by = "County.x") |>
+            by = "County.x", relationship = "many-to-many") |>
   mutate(
     Post_Election = as.integer(!is.na(post_year) & year == post_year & qnum %in% c(1, 2))
   ) |>
@@ -454,10 +455,30 @@ ms_df <- bind_rows(ca_ms, ny_ms, pa_ms) |>
 cat("Multi-state N by state:\n")
 print(table(ms_df$State))
 
-# Volume regression by state
+# Volume regression by state.
+# For CA we can apply the Did_Incumbent_Seek_Reelection filter because there are
+# decarceratory DAs who sought reelection. NY and PA lack that variation in the
+# filtered sample (no decarceratory incumbents seeking reelection in the data window),
+# so we use the full state sample there and flag it.
 for (st in c("CA", "NY", "PA")) {
   cat("\n--- Case volume regression:", st, "---\n")
-  dat_st <- ms_df |> filter(State == st, Did_Incumbent_Seek_Reelection == 1, !is.na(total_sentenced))
+  dat_full <- ms_df |> filter(State == st, !is.na(total_sentenced))
+  dat_incum <- dat_full |> filter(Did_Incumbent_Seek_Reelection == 1)
+
+  # Use incumbent-filter if there is variation in both Decarceratory and Election_Year_Full
+  has_variation <- function(d) {
+    length(unique(d$Decarceratory[!is.na(d$Decarceratory)])) > 1 &&
+    length(unique(d$Election_Year_Full[!is.na(d$Election_Year_Full)])) > 1
+  }
+
+  if (nrow(dat_incum) >= 10 && has_variation(dat_incum)) {
+    dat_st <- dat_incum
+    cat("  (sample: Did_Incumbent_Seek_Reelection == 1)\n")
+  } else {
+    dat_st <- dat_full
+    cat("  (sample: full state — incumbent filter drops all decarceratory variation)\n")
+  }
+
   if (nrow(dat_st) < 10) { cat("Insufficient data.\n"); next }
   tryCatch({
     m_vol_st <- feols(total_sentenced ~ Election_Year_Full * Decarceratory | County_FE + Quarter_FE,
