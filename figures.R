@@ -779,6 +779,110 @@ ggsave("figure6_county_event_studies.pdf", fig6, width = 10, height = 8)
 ggsave("figure6_county_event_studies.png", fig6, width = 10, height = 8, dpi = 300)
 cat("Figure 6 (per-county event studies) saved.\n")
 
+# =============================================================================
+# FIGURE 7: Per-County Event Study — All Three States (CA, NY, PA)
+# =============================================================================
+
+library(zoo)
+
+ny_raw <- read.csv("NY_Merged_Data_recoded.csv")
+pa_raw <- read.csv("PA_Merged_Data_FEB.csv")
+
+prep_state <- function(raw, state_name, county_col, quarter_col, prison_col) {
+  raw |>
+    mutate(
+      State  = state_name,
+      County = .data[[county_col]],
+      Quarter = .data[[quarter_col]],
+      Percentage_Prison = as.numeric(.data[[prison_col]]),
+      Decarceratory = as.integer(Decarceratory),
+      Election_Year = as.integer(Election_Year),
+      year  = as.integer(sub(".*(\\d{4}).*", "\\1", .data[[quarter_col]])),
+      qnum  = as.integer(sub(".*Q(\\d).*", "\\1", .data[[quarter_col]]))
+    ) |>
+    select(State, County, Quarter, Percentage_Prison, Decarceratory, Election_Year, year, qnum)
+}
+
+ca_es <- df |>
+  mutate(State = "CA", County = County.x) |>
+  select(State, County, Quarter, Percentage_Prison, Decarceratory, Election_Year, year, qnum)
+
+ny_es <- prep_state(ny_raw, "NY", "County", "County_and_Quarter", "Percentage_Prison")
+pa_es <- prep_state(pa_raw, "PA", "County", "County_and_Quarter", "Percentage_Prison")
+
+ms_es_raw <- bind_rows(ca_es, ny_es, pa_es)
+
+build_county_es <- function(data) {
+  election_events <- data |>
+    filter(Election_Year == 1, qnum == 3) |>
+    select(State, County, year) |>
+    distinct() |>
+    rename(election_year = year)
+
+  data |>
+    inner_join(election_events, by = c("State", "County")) |>
+    mutate(rel_q = (year - election_year) * 4 + (qnum - 3)) |>
+    filter(rel_q >= -6, rel_q <= 5, !is.na(Percentage_Prison)) |>
+    group_by(State, County) |>
+    mutate(
+      Decarceratory = max(Decarceratory, na.rm = TRUE),
+      baseline = mean(Percentage_Prison[rel_q < 0], na.rm = TRUE)
+    ) |>
+    ungroup() |>
+    filter(Decarceratory == 1) |>
+    mutate(prison_demeaned = Percentage_Prison - baseline) |>
+    group_by(State, County, rel_q) |>
+    summarise(
+      mean_prison = mean(prison_demeaned, na.rm = TRUE),
+      se_prison   = sd(prison_demeaned, na.rm = TRUE) / sqrt(n()),
+      n           = n(),
+      .groups = "drop"
+    )
+}
+
+ms_county_es <- build_county_es(ms_es_raw) |>
+  mutate(State = factor(State, levels = c("CA", "NY", "PA")),
+         county_label = paste0(County, "\n(", State, ")"))
+
+fig7 <- ggplot(ms_county_es, aes(x = rel_q, y = mean_prison)) +
+  annotate("rect", xmin = -0.5, xmax = 1.5, ymin = -Inf, ymax = Inf,
+           fill = "#0072B2", alpha = 0.10) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50", linewidth = 0.4) +
+  geom_ribbon(aes(ymin = mean_prison - 1.96 * se_prison,
+                  ymax = mean_prison + 1.96 * se_prison),
+              fill = "#0072B2", alpha = 0.15) +
+  geom_line(color = "#0072B2", linewidth = 0.9) +
+  geom_point(color = "#0072B2", size = 1.8) +
+  facet_wrap(~county_label, ncol = 4, scales = "free_y") +
+  scale_x_continuous(breaks = c(-6, -3, 0, 3),
+                     labels = c("-6q", "-3q", "Elec", "+3q")) +
+  scale_y_continuous(labels = function(x) paste0(ifelse(x > 0, "+", ""), round(x, 0), "pp")) +
+  labs(
+    title    = "Within-County Change in Prison Sentencing Around Elections: CA, NY, PA",
+    subtitle = "Decarceratory counties only. Y-axis = deviation from each county's own pre-election mean.\nShaded band = election quarters (Q3–Q4 of election year). Bands = 95% CI.",
+    x        = "Quarter Relative to Election (Q3 = t=0)",
+    y        = "Change in Prison Rate (pp vs. own baseline)",
+    caption  = "Multi-state sample. Each panel = one decarceratory county. Multiple elections per county averaged.\nState in parentheses below county name."
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position    = "none",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    strip.text         = element_text(face = "bold", size = 8),
+    plot.caption       = element_text(color = "grey50", size = 8),
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(color = "grey40", size = 9),
+    axis.text.x        = element_text(size = 7)
+  )
+
+n_counties_ms <- nrow(distinct(ms_county_es, State, County))
+ggsave("figure7_multistate_county_event_studies.pdf", fig7,
+       width = 12, height = ceiling(n_counties_ms / 4) * 3)
+ggsave("figure7_multistate_county_event_studies.png", fig7,
+       width = 12, height = ceiling(n_counties_ms / 4) * 3, dpi = 300)
+cat("Figure 7 (multi-state per-county event studies) saved.\n")
+
 # --- Table: Baseline means by DA type (non-election quarters) ---
 baseline_table <- baseline_df |>
   group_by(DA_type) |>

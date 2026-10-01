@@ -379,6 +379,110 @@ etable(m_volume,
        file   = "table_volume_check.tex")
 cat("Table exported: table_volume_check.tex\n")
 
+# =============================================================================
+# MULTI-STATE CASE VOLUME ANALYSIS (CA + NY + PA)
+# =============================================================================
+
+cat("\n=== MULTI-STATE CASE VOLUME ANALYSIS ===\n")
+
+# Load NY and PA datasets
+ny_raw <- read.csv("NY_Merged_Data_recoded.csv")
+pa_raw <- read.csv("PA_Merged_Data_FEB.csv")
+
+# Harmonize CA
+ca_ms <- df |>
+  mutate(
+    State  = "CA",
+    County = County.x,
+    Contested = as.integer(Contested),
+    total_sentenced = rowSums(cbind(Prison, Probation, Straight_1170h, Split_1170h), na.rm = TRUE)
+  ) |>
+  select(State, County, Quarter, year = year_str, Percentage_Prison, Percentage_Probation,
+         Decarceratory, Election_Year, Election_Year_Full,
+         Did_Incumbent_Seek_Reelection, Contested, total_sentenced) |>
+  mutate(year = as.integer(year),
+         qnum = as.integer(sub(".*Q(\\d).*", "\\1", Quarter)))
+
+# Harmonize NY
+ny_ms <- ny_raw |>
+  mutate(
+    State  = "NY",
+    Contested = as.integer(pmax(as.integer(Contested_Primary), as.integer(Contested_General), na.rm = TRUE)),
+    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+    Election_Year = as.integer(Election_Year),
+    year   = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter)),
+    qnum   = as.integer(sub(".*Q(\\d).*", "\\1", County_and_Quarter)),
+    Quarter = County_and_Quarter,
+    total_sentenced = as.integer(Total)
+  ) |>
+  mutate(
+    year_str = as.character(year),
+    Election_Year_Full = as.integer(
+      paste0(County, "_", year_str) %in%
+        (ny_raw |>
+           mutate(Election_Year = as.integer(Election_Year),
+                  yr = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter))) |>
+           filter(Election_Year == 1) |>
+           mutate(key = paste0(County, "_", yr)) |>
+           pull(key) |> unique()
+        )
+    )
+  ) |>
+  select(State, County, Quarter, year, qnum, Percentage_Prison, Percentage_Probation,
+         Decarceratory, Election_Year, Election_Year_Full,
+         Did_Incumbent_Seek_Reelection, Contested, total_sentenced)
+
+# Harmonize PA
+pa_ms <- pa_raw |>
+  mutate(
+    State  = "PA",
+    Contested = as.integer(pmax(as.integer(Contested_Primary), as.integer(Contested_General), na.rm = TRUE)),
+    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+    Election_Year = as.integer(Election_Year),
+    year   = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter)),
+    qnum   = as.integer(sub(".*Q(\\d).*", "\\1", County_and_Quarter)),
+    Quarter = County_and_Quarter,
+    total_sentenced = as.integer(Total)
+  ) |>
+  mutate(
+    year_str = as.character(year),
+    Election_Year_Full = as.integer(
+      paste0(County, "_", year_str) %in%
+        (pa_raw |>
+           mutate(Election_Year = as.integer(Election_Year),
+                  yr = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter))) |>
+           filter(Election_Year == 1) |>
+           mutate(key = paste0(County, "_", yr)) |>
+           pull(key) |> unique()
+        )
+    )
+  ) |>
+  select(State, County, Quarter, year, qnum, Percentage_Prison, Percentage_Probation,
+         Decarceratory, Election_Year, Election_Year_Full,
+         Did_Incumbent_Seek_Reelection, Contested, total_sentenced)
+
+ms_df <- bind_rows(ca_ms, ny_ms, pa_ms) |>
+  mutate(
+    County_FE = as.factor(paste0(State, "_", County)),
+    Quarter_FE = as.factor(Quarter),
+    Decarceratory = as.integer(Decarceratory)
+  )
+
+cat("Multi-state N by state:\n")
+print(table(ms_df$State))
+
+# Volume regression by state
+for (st in c("CA", "NY", "PA")) {
+  cat("\n--- Case volume regression:", st, "---\n")
+  dat_st <- ms_df |> filter(State == st, Did_Incumbent_Seek_Reelection == 1, !is.na(total_sentenced))
+  if (nrow(dat_st) < 10) { cat("Insufficient data.\n"); next }
+  tryCatch({
+    m_vol_st <- feols(total_sentenced ~ Election_Year_Full * Decarceratory | County_FE + Quarter_FE,
+                      data = dat_st, cluster = ~County)
+    print(etable(m_vol_st, keep = c("Election_Year_Full", "Decarceratory", "Election_Year_Full:Decarceratory")))
+  }, error = function(e) cat("Error:", conditionMessage(e), "\n"))
+}
+
 cat("\n=== LEAVE-ONE-OUT CHECK: Primary result (Incumbent + Contested) ===\n")
 
 # First: show exactly which county-quarters are identifying the key cell
