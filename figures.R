@@ -821,8 +821,9 @@ build_county_es <- function(data) {
     distinct() |>
     rename(election_year = year)
 
+  # Many-to-many is expected: each county row joins to every election year for that county
   data |>
-    inner_join(election_events, by = c("State", "County")) |>
+    inner_join(election_events, by = c("State", "County"), relationship = "many-to-many") |>
     mutate(rel_q = (year - election_year) * 4 + (qnum - 3)) |>
     filter(rel_q >= -6, rel_q <= 5, !is.na(Percentage_Prison)) |>
     group_by(State, County) |>

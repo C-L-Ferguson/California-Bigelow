@@ -405,68 +405,49 @@ ca_ms <- df |>
   mutate(year = as.integer(year),
          qnum = as.integer(sub(".*Q(\\d).*", "\\1", Quarter)))
 
-# Harmonize NY
-ny_ms <- ny_raw |>
-  mutate(
-    State  = "NY",
-    Contested = as.integer(pmax(as.integer(Contested_Primary), as.integer(Contested_General), na.rm = TRUE)),
-    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
-    Election_Year = as.integer(Election_Year),
-    year   = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter)),
-    qnum   = as.integer(sub(".*Q(\\d).*", "\\1", County_and_Quarter)),
-    Quarter = County_and_Quarter,
-    total_sentenced = as.integer(Total)
-  ) |>
-  mutate(
-    year_str = as.character(year),
-    Election_Year_Full = as.integer(
-      paste0(County, "_", year_str) %in%
-        (ny_raw |>
-           mutate(Election_Year = as.integer(Election_Year),
-                  yr = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter))) |>
-           filter(Election_Year == 1) |>
-           mutate(key = paste0(County, "_", yr)) |>
-           pull(key) |> unique()
-        )
-    )
-  ) |>
-  select(State, County, Quarter, year, qnum, Percentage_Prison, Percentage_Probation,
-         Decarceratory, Election_Year, Election_Year_Full,
-         Did_Incumbent_Seek_Reelection, Contested, total_sentenced)
+harmonize_state <- function(raw, state_name) {
+  raw |>
+    mutate(
+      State  = state_name,
+      year   = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter)),
+      qnum   = as.integer(sub(".*Q(\\d).*", "\\1", County_and_Quarter)),
+      # Time-only quarter label (not county-prefixed) — avoids collinearity with County_FE
+      Quarter_time = paste0(year, " Q", qnum),
+      Contested = suppressWarnings(
+        as.integer(pmax(as.integer(Contested_Primary), as.integer(Contested_General), na.rm = TRUE))
+      ),
+      Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
+      Election_Year  = as.integer(Election_Year),
+      total_sentenced = as.integer(Total)
+    ) |>
+    mutate(
+      Election_Year_Full = as.integer(
+        paste0(County, "_", year) %in%
+          (raw |>
+             mutate(Election_Year = as.integer(Election_Year),
+                    yr = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter))) |>
+             filter(Election_Year == 1) |>
+             mutate(key = paste0(County, "_", yr)) |>
+             pull(key) |> unique()
+          )
+      )
+    ) |>
+    select(State, County, Quarter_time, year, qnum,
+           Percentage_Prison, Percentage_Probation,
+           Decarceratory, Election_Year, Election_Year_Full,
+           Did_Incumbent_Seek_Reelection, Contested, total_sentenced)
+}
 
-# Harmonize PA
-pa_ms <- pa_raw |>
-  mutate(
-    State  = "PA",
-    Contested = as.integer(pmax(as.integer(Contested_Primary), as.integer(Contested_General), na.rm = TRUE)),
-    Did_Incumbent_Seek_Reelection = as.integer(Did_Incumbent_Seek_Reelection),
-    Election_Year = as.integer(Election_Year),
-    year   = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter)),
-    qnum   = as.integer(sub(".*Q(\\d).*", "\\1", County_and_Quarter)),
-    Quarter = County_and_Quarter,
-    total_sentenced = as.integer(Total)
-  ) |>
-  mutate(
-    year_str = as.character(year),
-    Election_Year_Full = as.integer(
-      paste0(County, "_", year_str) %in%
-        (pa_raw |>
-           mutate(Election_Year = as.integer(Election_Year),
-                  yr = as.integer(sub(".*(\\d{4}).*", "\\1", County_and_Quarter))) |>
-           filter(Election_Year == 1) |>
-           mutate(key = paste0(County, "_", yr)) |>
-           pull(key) |> unique()
-        )
-    )
-  ) |>
-  select(State, County, Quarter, year, qnum, Percentage_Prison, Percentage_Probation,
-         Decarceratory, Election_Year, Election_Year_Full,
-         Did_Incumbent_Seek_Reelection, Contested, total_sentenced)
+ny_ms <- harmonize_state(ny_raw, "NY")
+pa_ms <- harmonize_state(pa_raw, "PA")
+
+# CA: Quarter is already a time-only label (e.g. "2018 Q1 Court")
+ca_ms <- ca_ms |> rename(Quarter_time = Quarter)
 
 ms_df <- bind_rows(ca_ms, ny_ms, pa_ms) |>
   mutate(
-    County_FE = as.factor(paste0(State, "_", County)),
-    Quarter_FE = as.factor(Quarter),
+    County_FE  = as.factor(paste0(State, "_", County)),
+    Quarter_FE = as.factor(Quarter_time),
     Decarceratory = as.integer(Decarceratory)
   )
 
